@@ -1624,7 +1624,7 @@ function render(forPick){const w=cv.width,h=cv.height;gl.viewport(0,0,w,h);const
   gl.uniform3fv(PR.u.uAmb,ambC);gl.uniform1f(PR.u.uTime,tNow);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,faceTex);gl.uniform1i(PR.u.uTex,0);gl.uniform3f(PR.u.uFT,1,0,0);};
  const opq=L.filter(d=>d.alpha>=0.999).sort((a,b)=>a.mat-b.mat),tr=L.filter(d=>d.alpha<0.999).map(d=>({d,z:len(sub([d.m[12],d.m[13],d.m[14]],eye))})).sort((a,b)=>b.z-a.z).map(x=>x.d);
  const one=d=>{useMat(d.mat);gl.uniformMatrix4fv(PR.u.uM,false,d.m);gl.uniformMatrix3fv(PR.u.uN,false,M4.nrm(d.m));gl.uniform3fv(PR.u.uCol,d.flash?[1,1,1]:hex2rgb(d.col));gl.uniform1f(PR.u.uMat,d.mat);gl.uniform1f(PR.u.uAlpha,d.alpha);gl.uniform1f(PR.u.uFace,d.face?1:0);
-  gl.uniform1f(PR.u.uRefl,d.refl||0);gl.uniform1f(PR.u.uGlow,d.glow||0);gl.uniform3fv(PR.u.uSize,d.size||[1,1,1]);gl.uniform1f(PR.u.uSel,d.sel?1:0);bindMesh(PR,d.mesh);gl.drawElements(gl.TRIANGLES,d.mesh.c,d.mesh.t,0);};
+  gl.uniform1f(PR.u.uRefl,d.refl||0);gl.uniform1f(PR.u.uGlow,d.glow||0);gl.uniform3fv(PR.u.uSize,d.size||[1,1,1]);gl.uniform1f(PR.u.uSel,d.sel?1:0);bindMesh(PR,d.mesh);if(d.inv){gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT);}gl.drawElements(gl.TRIANGLES,d.mesh.c,d.mesh.t,0);if(d.inv)gl.disable(gl.CULL_FACE);};
  gl.disable(gl.BLEND);opq.forEach(one);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);tr.forEach(one);gl.depthMask(true);gl.disable(gl.BLEND);}
 const pickFB=gl.createFramebuffer(),pickTex=gl.createTexture(),pickRB=gl.createRenderbuffer();let pickW=0,pickH=0;
 function pick(x,y){if(pickW!==cv.width||pickH!==cv.height){pickW=cv.width;pickH=cv.height;gl.bindTexture(gl.TEXTURE_2D,pickTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,pickW,pickH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.bindRenderbuffer(gl.RENDERBUFFER,pickRB);gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT16,pickW,pickH);
@@ -2216,7 +2216,7 @@ drawList=function(forPick){const L=[];pickTable=[];const push=(d,ref)=>{pickTabl
  if(window.bxPreviewBuild&&bxPreviewBuild(push))return L;
  const addPart=(st,ref,selOn,extra)=>{if(st.Transparency>=1&&!selOn)return;const m=partMatrix(st);push(Object.assign({m,mesh:GEO[st.Shape]||GEO.Block,col:st.Color,mat:matIndex(st.Shape==='Truss'?'Truss':st.Material),alpha:1-(st.Transparency||0)*(st.Transparency>=1?0.85:1),refl:st.Reflectance||0,size:st.Size,sel:selOn},extra||{}),ref);
   if((st.Camera||(ref&&(ref.o?bxCamNameOf(ref.o):ref.P&&(ref.P.camName||bxCamNameOf(ref.P.o)))))&&!(G&&st.Transparency>=1))camLens(push,st,ref,selOn);};
- if(G){G.parts.forEach(P=>{if(!P.alive)return;addPart(P.st,{P},false,Object.assign({glow:P.glow?(P.glowNow??1):0,flash:P.flashT>0},bxPX(P.st,P.portal,P.o&&P.o.code)));});
+ if(G){G.parts.forEach(P=>{if(!P.alive)return;addPart(P.st,{P},false,Object.assign({glow:P.glow?(P.glowNow??1):0,flash:P.flashT>0,inv:!!P.inv},bxPX(P.st,P.portal,P.o&&P.o.code)));});
   G.humans.forEach(h=>{if(h.invis)return;if(h.dead&&!h.deadAnim)return;const pose=humanoidPose(h);const M=rigMatrices(pose);drawRig(push,M,h.look||lookOf({}),{h},false,h.ghost>0?0.5:1);
    if(!h.dead&&h.equipped&&h.tools.length){const tm={Sword:[[0.3,4,0.6],'#c0c0c0',4],'Speed Coil':[[1.2,1.2,1.2],'#ff8c00',2],'Gravity Coil':[[1.2,1.2,1.2],'#6225d1',2],Flashlight:[[0.5,0.5,2],'#333333',4],Rocket:[[0.8,0.8,2.4],'#ffffff',4]}[h.equipped]||[[1,1,1],'#888',0];
     const m=M4.mul(M['Right Arm'],M4.mul(M4.tr(-1.5,1.0+(h.equipped==='Sword'?-1.5:0),0.6),M4.sc(...tm[0])));push({m,mesh:GEO.Block,col:tm[1],mat:tm[2],alpha:1,size:tm[0]},{h});}});
@@ -2268,7 +2268,7 @@ render=function(forPick,V){
  const one=d=>{useMat(d.mat);gl.uniformMatrix4fv(PR.u.uM,false,d.m);gl.uniformMatrix3fv(PR.u.uN,false,M4.nrm(d.m));gl.uniform3fv(PR.u.uCol,d.flash?[1,1,1]:hex2rgb(d.col));gl.uniform1f(PR.u.uMat,d.mat);gl.uniform1f(PR.u.uAlpha,d.alpha);gl.uniform1f(PR.u.uFace,d.face?1:0);
   if(d.face){gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,d.tex||faceTex);}
   if(PR.u.uPortal){if(d.portal){const T=PORT[d.portal];gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,T&&T.ready&&curPortal!==d.portal?T.tex:blackTex);gl.activeTexture(gl.TEXTURE0);gl.uniform1f(PR.u.uPortal,T||!d.decal?1:0);const ps=d.psides||[[0,0,1],[0,0,1]];if(PR.u.uPSA){gl.uniform3fv(PR.u.uPSA,ps[0]);gl.uniform3fv(PR.u.uPSB,ps[1]);}if(PR.u.uPDecal)gl.uniform1f(PR.u.uPDecal,d.decal?1:0);}else gl.uniform1f(PR.u.uPortal,0);}
-  gl.uniform1f(PR.u.uRefl,d.refl||0);gl.uniform1f(PR.u.uGlow,d.glow||0);gl.uniform3fv(PR.u.uSize,d.size||[1,1,1]);gl.uniform1f(PR.u.uSel,d.sel?1:0);bindMesh(PR,d.mesh);gl.drawElements(gl.TRIANGLES,d.mesh.c,d.mesh.t,0);};
+  gl.uniform1f(PR.u.uRefl,d.refl||0);gl.uniform1f(PR.u.uGlow,d.glow||0);gl.uniform3fv(PR.u.uSize,d.size||[1,1,1]);gl.uniform1f(PR.u.uSel,d.sel?1:0);bindMesh(PR,d.mesh);if(d.inv){gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT);}gl.drawElements(gl.TRIANGLES,d.mesh.c,d.mesh.t,0);if(d.inv)gl.disable(gl.CULL_FACE);};
  gl.disable(gl.BLEND);opq.forEach(one);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);tr.forEach(one);gl.depthMask(true);gl.disable(gl.BLEND);
  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,blackTex);gl.activeTexture(gl.TEXTURE0);};
 
@@ -2928,7 +2928,7 @@ function cubeBase(M,ref){const base=M.Torso;let ph=0;if(ref&&ref.h&&ref.h.roll)p
  return M4.mul(base,M4.mul(M4.tr(0,yc,fo),eulerM([ph*90,0,0])));}
 const ANCH={Head:[0,CS/2,0],Torso:[0,0,0],'Left Arm':[CS/2,0,0],'Right Arm':[-CS/2,0,0],'Left Leg':[CS/4,-CS/2,0],'Right Leg':[-CS/4,-CS/2,0]};
 window.bxCubeDraw=function(push,M,look,ref,selOn,alpha,hi){alpha=alpha==null?1:alpha;const m=cubeBase(M,ref);const lref=ref&&ref.pv?{pv:1,limb:'Torso'}:ref;
- push({m,mesh:CUBE,col:look.colors.Torso,mat:matIndex(look.mats.Torso||'SmoothPlastic'),alpha,size:[CS,CS,CS],sel:selOn||(hi&&hi==='Torso')},lref);
+ push({m,mesh:CUBE,inv:!!(ref&&ref.h&&ref.h.inv),col:look.colors.Torso,mat:matIndex(look.mats.Torso||'SmoothPlastic'),alpha,size:[CS,CS,CS],sel:selOn||(hi&&hi==='Torso')},lref);
  look.acc.forEach((a,i)=>{const an=ANCH[a.limb||'Head']||ANCH.Head;const p=a.pos||[0,0,0];const off=(a.limb||'Head')==='Head'?[p[0],p[1]-0.1,p[2]]:(a.limb==='Torso'?p.map(v=>v*1.55):p);const sz=a.size||[1,1,1];
   const mm=M4.mul(m,M4.mul(M4.tr(an[0]+off[0],an[1]+off[1],an[2]+off[2]),M4.mul(eulerM(a.rot||[0,0,0]),M4.sc(...sz))));
   push({m:mm,mesh:GEO[a.shape]||GEO.Block,col:COLOR_HEX(a.color||'#888'),mat:matIndex(a.mat||'SmoothPlastic'),alpha:alpha*(1-(a.transp||0)),size:sz,sel:selOn||(hi&&hi==='acc'+i),glow:a.mat==='Neon'?0.3:0},ref&&ref.pv?{pv:1,acc:i}:ref);});};
@@ -2992,6 +2992,17 @@ const _rp=refreshProps;refreshProps=function(){_rp();const pp=$('props');const o
  const w=document.createElement('div');w.innerHTML=propRow('Portal sides',`<div class="psnet"><i></i>${b('Top')}<i></i><i></i>${b('Left')}${b('Front')}${b('Right')}${b('Back')}<i></i>${b('Bottom')}<i></i><i></i></div>`);
  const row=w.firstChild;const cb=pp.querySelector('#pcode');if(cb)cb.before(row);else pp.append(row);
  row.querySelectorAll('[data-ps]').forEach(el=>el.onclick=()=>{const cur=Object.assign({},sidesOf(o.props));cur[el.dataset.ps]=!cur[el.dataset.ps];sel.map(byId).filter(x=>x&&x.cls==='Part').forEach(x=>x.props.PortalSides=Object.assign({},cur));commit();refreshProps();});};
+})();
+
+/* ================= 9. invert commands ================= */
+(function(){
+const PA2=(name,help,ex,fn)=>reg('Look',name,help,ex,fn,{tg:true});
+const humOf=c=>c.P&&c.P.kind==='bot'?c.P.h:null;
+const invHex=h=>{const x=COLOR_HEX(h).replace('#','');const n=parseInt(x.length===3?x.split('').map(d=>d+d).join(''):x,16);return '#'+(0xffffff^n).toString(16).padStart(6,'0');};
+PA2('invert','turns it inside out: the outside disappears and you see its inside walls instead','#invert',(c)=>{const st=selfSt(c);if(st)c.P.inv=true;else{const h=humOf(c);if(h)h.inv=true;}});
+PA2('uninvert','turns an inverted thing the right way out again','#uninvert',(c)=>{const st=selfSt(c);if(st)c.P.inv=false;else{const h=humOf(c);if(h)h.inv=false;}});
+PA2('invert_color','flips its color to the opposite one (white becomes black, red becomes cyan). Do it again to get the old color back','#invert_color',(c)=>{const st=selfSt(c);if(st){st.Color=invHex(st.Color);return;}
+ const h=humOf(c);if(h){if(h.colors&&h.colors.Torso)h.colors.Torso=invHex(h.colors.Torso);if(h.look&&h.look.colors&&h.look.colors!==h.colors)h.look.colors.Torso=invHex(h.look.colors.Torso);}});
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
