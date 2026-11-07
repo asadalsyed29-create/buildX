@@ -1655,7 +1655,7 @@ function drawOverlay(){if(ov.width!==cv.width||ov.height!==cv.height){ov.width=c
  /* play-mode overlay */const p=G.player;
  G.parts.forEach(P=>{if(!P.alive)return;if(P.label){const P2=project(add(P.st.Position,[0,P.st.Size[1]/2+1.5,0]));if(P2)nameTag(P2,String(evalExpr(P.label)),'#fff',dpr,true);}
   if(P.light){const P2=project(P.st.Position);if(P2){const r=P.light.r*12*dpr/Math.max(1,len(sub(EYE,P.st.Position))*0.08);const g=oc.createRadialGradient(P2[0],P2[1],0,P2[0],P2[1],r);const [R,Gc,Bc]=hex2rgb(P.light.col).map(v=>Math.round(v*255));g.addColorStop(0,`rgba(${R},${Gc},${Bc},0.35)`);g.addColorStop(1,`rgba(${R},${Gc},${Bc},0)`);oc.fillStyle=g;oc.fillRect(P2[0]-r,P2[1]-r,2*r,2*r);}}
-  if(P.beam){const a=project(P.st.Position),b=project(add(P.st.Position,[0,200,0]));if(a&&b){oc.strokeStyle='rgba(255,255,220,0.35)';oc.lineWidth=14*dpr;oc.beginPath();oc.moveTo(...a);oc.lineTo(...b);oc.stroke();}}});
+  if(P.beam){const a=project(P.st.Position),b=project(add(P.st.Position,[0,200,0]));if(a&&b){oc.strokeStyle=P.beamCol||'rgba(255,255,220,0.35)';oc.lineWidth=14*dpr;oc.beginPath();oc.moveTo(...a);oc.lineTo(...b);oc.stroke();}}});
  G.humans.forEach(h=>{if(h.dead||h.invis)return;const top=project(add(h.pos,[0,6*h.size,0]));if(!top)return;if(h.kind==='bot'){if(sg('BotNames'))nameTag(sg('BotHP')?[top[0],top[1]-12*dpr]:top,h.name,'#fff',dpr);if(sg('BotHP'))hpBar(top,h.hp,h.max,dpr);}
   if(h.say&&h.sayT>0&&sg('ShowChat'))bubble(add(h.pos,[0,6.8*h.size,0]),h.say,dpr);if(h.ff>0||h.shield>0){const c=project(add(h.pos,[0,2.5*h.size,0]));if(c){oc.strokeStyle=`rgba(120,200,255,${0.4+0.2*Math.sin(G.t*10)})`;oc.lineWidth=3*dpr;oc.beginPath();oc.arc(c[0],c[1],70*dpr*h.size/Math.max(1,len(sub(EYE,h.pos))*0.06),0,7);oc.stroke();}}});
  G.particles.forEach(q=>{const P2=project(q.p);if(!P2)return;const d=len(sub(EYE,q.p));const s=Math.max(1,q.sz*dpr*20/Math.max(4,d));oc.globalAlpha=Math.max(0,1-q.t/q.life);oc.fillStyle=q.col;
@@ -3003,6 +3003,85 @@ PA2('invert','turns it inside out: the outside disappears and you see its inside
 PA2('uninvert','turns an inverted thing the right way out again','#uninvert',(c)=>{const st=selfSt(c);if(st)c.P.inv=false;else{const h=humOf(c);if(h)h.inv=false;}});
 PA2('invert_color','flips its color to the opposite one (white becomes black, red becomes cyan). Do it again to get the old color back','#invert_color',(c)=>{const st=selfSt(c);if(st){st.Color=invHex(st.Color);return;}
  const h=humOf(c);if(h){if(h.colors&&h.colors.Torso)h.colors.Torso=invHex(h.colors.Torso);if(h.look&&h.look.colors&&h.look.colors!==h.colors)h.look.colors.Torso=invHex(h.look.colors.Torso);}});
+})();
+
+/* ================= 10. the big command pack: color verbs, colored effects, instruments, chords, drums ================= */
+(function(){
+/* ---- the colours: every named colour command, one per distinct colour ---- */
+const COLS=[];{const seen=new Set();Object.keys(CMDS).filter(k=>CMDS[k].cat==='Colors'&&!k.includes('_')).forEach(k=>{const P={kind:'part',st:{}};try{CMDS[k].fn({P},'');}catch(e){}const hx=P.st.Color;if(!hx||seen.has(hx))return;seen.add(hx);COLS.push([k,hx]);});}
+window.bxColorList=COLS;
+const rgb=h=>{const x=COLOR_HEX(h).replace('#','');const n=parseInt(x,16);return [(n>>16)&255,(n>>8)&255,n&255];};
+const hex=c=>'#'+c.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+const mix=(a,b,t)=>{const A=rgb(a),B=rgb(b);return hex(A.map((v,i)=>v+(B[i]-v)*t));};
+const getC=c=>{const st=selfSt(c);if(st)return st.Color;if(c.P&&c.P.kind==='bot'){const h=c.P.h;return (h.colors&&h.colors.Torso)||'#5b6cff';}return null;};
+const setC=(c,hx)=>{const st=selfSt(c);if(st){st.Color=hx;return;}if(c.P&&c.P.kind==='bot'){const h=c.P.h;if(h.colors)h.colors.Torso=hx;if(h.look&&h.look.colors&&h.look.colors!==h.colors)h.look.colors.Torso=hx;}};
+const owner=c=>c.P;
+/* fades and pulses tick every game step */
+const gs0=gameStep;gameStep=function(dt0){gs0.apply(this,arguments);if(!G||!G.__cfx)return;const dt=dt0*(G.ts||1);
+ G.__cfx=G.__cfx.filter(f=>{f.t+=dt;if(f.P.alive===false)return false;
+  if(f.kind==='fade'){const k=Math.min(1,f.t/f.d);setC(f.c,mix(f.a,f.b,k*k*(3-2*k)));return k<1;}
+  if(f.kind==='flash'){if(f.t>=f.d){setC(f.c,f.a);return false;}return true;}
+  if(f.kind==='pulse'){if(f.stop)return false;const k=0.5-0.5*Math.cos(f.t*Math.PI*2/f.d);setC(f.c,mix(f.a,f.b,k));return true;}
+  return false;});};
+const addFx=(c,f)=>{G.__cfx=G.__cfx||[];G.__cfx=G.__cfx.filter(x=>!(x.P===c.P&&(x.kind==='pulse'||x.kind==='fade'||x.kind==='flash')&&f.kind!=='flash'&&x.kind===f.kind));f.P=owner(c);f.c={P:c.P};f.t=0;G.__cfx.push(f);};
+const LK=(name,help,fn)=>reg('Colors',name,help,'#'+name,fn,{tg:true});
+const EF=(name,help,fn)=>reg('Effects',name,help,'#'+name,fn,{tg:true});
+COLS.forEach(([cn,hx])=>{const nice=cn;
+ LK('glow_'+cn,`paints it ${nice} and makes it glow`,(c)=>{setC(c,hx);if(c.P)c.P.glow=1;});
+ LK('tint_'+cn,`gives it a ${nice} tint (mixes its color part way toward ${nice})`,(c)=>{const o=getC(c);if(o)setC(c,mix(o,hx,0.4));});
+ LK('fade_to_'+cn,`smoothly changes its color to ${nice} over 1 second`,(c)=>{const o=getC(c);if(o)addFx(c,{kind:'fade',a:o,b:hx,d:1});});
+ LK('flash_'+cn,`flashes ${nice} for a moment, then goes back to its color`,(c)=>{const o=getC(c);if(!o)return;const old=(G.__cfx||[]).find(x=>x.P===c.P&&x.kind==='flash');setC(c,hx);addFx(c,{kind:'flash',a:old?old.a:o,d:0.3});});
+ LK('pulse_'+cn,`keeps pulsing between its color and ${nice} (stop with #stop_pulse)`,(c)=>{const prev=(G.__cfx||[]).find(x=>x.P===c.P&&x.kind==='pulse');const o=prev?prev.a:getC(c);if(o)addFx(c,{kind:'pulse',a:o,b:hx,d:1.2});});
+ EF('light_'+cn,`gives it a ${nice} light that lights up things around it`,(c)=>{c.P.light=Object.assign({r:20},c.P.light||{},{col:hx});});
+ EF('shockwave_'+cn,`sends out a ${nice} shockwave ring`,(c)=>{G.rings.push({p:ownerPos(c).slice(),t:0,col:hx});});
+ EF('beam_'+cn,`shines a ${nice} beam of light straight up`,(c)=>{const A=rgb(hx);c.P.beam=1;c.P.beamCol=`rgba(${A[0]},${A[1]},${A[2]},0.42)`;});
+ reg('World','fog_'+cn,`fills the world with ${nice} fog`,'#fog_'+cn,()=>{S.lighting.FogColor=hx;if((S.lighting.FogEnd||1400)>600){S.lighting.FogStart=20;S.lighting.FogEnd=260;}});
+ ['sparkles','glitter','stars','bubbles','fire','smoke','hearts','snow','leaves','music_notes','money'].forEach(k=>{const nm=k+'_'+cn;if(CMDS[nm])return;
+  EF(nm,`${nice} ${k.replace(/_/g,' ')} around it`,(c)=>{c.P.fx=c.P.fx||{};c.P.fx[k+'|'+hx]=1;});});});
+reg('Look','grayscale','takes the color out of it, leaving a grey of the same brightness','#grayscale',(c)=>{const o=getC(c);if(!o)return;const A=rgb(o);const y=0.299*A[0]+0.587*A[1]+0.114*A[2];setC(c,hex([y,y,y]));},{tg:true});
+reg('Look','sepia','gives it an old-photo brown tone','#sepia',(c)=>{const o=getC(c);if(!o)return;const [r,g,b]=rgb(o);setC(c,hex([0.393*r+0.769*g+0.189*b,0.349*r+0.686*g+0.168*b,0.272*r+0.534*g+0.131*b]));},{tg:true});
+LK('stop_pulse','stops pulsing and goes back to its own color',(c)=>{(G.__cfx||[]).forEach(f=>{if(f.P===c.P&&f.kind==='pulse'){f.stop=1;setC(c,f.a);}});});
+
+/* ---- instruments ---- */
+const vol=()=>(G?G.volume??1:1);
+function env(a,g,t,peak,att,dec){g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(0.0002,peak*vol()),t+att);g.gain.exponentialRampToValueAtTime(0.0001,t+att+dec);}
+function osc(a,type,f,t,d,dest,det){const o=a.createOscillator();o.type=type;o.frequency.setValueAtTime(f,t);if(det)o.detune.setValueAtTime(det,t);o.connect(dest);o.start(t);o.stop(t+d+0.05);return o;}
+const KS={};
+const INST={
+ piano(a,f,t){const hi=Math.min(1,f/1500),dec=1.6-hi*1.1;const lp=a.createBiquadFilter();lp.type='lowpass';lp.frequency.setValueAtTime(Math.min(16000,f*9),t);lp.frequency.exponentialRampToValueAtTime(Math.max(200,f*2.2),t+dec);const g=a.createGain();env(a,g,t,0.2,0.004,dec);lp.connect(g);g.connect(a.destination);
+  osc(a,'triangle',f,t,dec,lp,-3);osc(a,'triangle',f,t,dec,lp,3);const g2=a.createGain();env(a,g2,t,0.05,0.003,dec*0.5);g2.connect(lp);osc(a,'sine',f*2,t,dec,g2);},
+ bell(a,f,t){[[1,0.16,2.6],[2,0.07,1.7],[2.76,0.09,1.3],[5.4,0.04,0.7],[8.93,0.02,0.4]].forEach(([r,v,d])=>{const g=a.createGain();env(a,g,t,v,0.002,d);g.connect(a.destination);osc(a,'sine',f*r,t,d,g);});},
+ organ(a,f,t){const g=a.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(0.09*vol(),t+0.025);g.gain.setValueAtTime(0.09*vol(),t+0.55);g.gain.linearRampToValueAtTime(0.0001,t+0.68);g.connect(a.destination);
+  [[0.5,0.5],[1,1],[2,0.7],[3,0.35],[4,0.3],[6,0.12]].forEach(([r,v])=>{const gg=a.createGain();gg.gain.value=v;gg.connect(g);osc(a,'sine',f*r,t,0.7,gg);});},
+ pluck(a,f,t){const sr=a.sampleRate,d=1.4,n=Math.floor(sr*d),N=Math.max(2,Math.round(sr/f));const key=N;let b=KS[key];
+  if(!b){b=a.createBuffer(1,n,sr);const c=b.getChannelData(0);const ring=new Float32Array(N);for(let i=0;i<N;i++)ring[i]=Math.random()*2-1;let p=0;for(let i=0;i<n;i++){const nx=(p+1)%N;const v=ring[p];c[i]=v;ring[p]=(v+ring[nx])*0.4985;p=nx;}KS[key]=b;}
+  const s=a.createBufferSource();s.buffer=b;const g=a.createGain();g.gain.value=0.35*vol();s.connect(g);g.connect(a.destination);s.start(t);},
+ bass(a,f,t){const lp=a.createBiquadFilter();lp.type='lowpass';lp.Q.value=4;lp.frequency.setValueAtTime(f*7,t);lp.frequency.exponentialRampToValueAtTime(f*1.4,t+0.35);const g=a.createGain();env(a,g,t,0.2,0.006,0.7);lp.connect(g);g.connect(a.destination);osc(a,'sawtooth',f,t,0.75,lp);osc(a,'square',f/2,t,0.75,lp);},
+ flute(a,f,t){const g=a.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(0.12*vol(),t+0.07);g.gain.setValueAtTime(0.11*vol(),t+0.55);g.gain.linearRampToValueAtTime(0.0001,t+0.75);g.connect(a.destination);
+  const o=osc(a,'sine',f,t,0.8,g);const lfo=a.createOscillator(),lg=a.createGain();lfo.frequency.value=5.2;lg.gain.value=f*0.006;lfo.connect(lg);lg.connect(o.frequency);lfo.start(t+0.15);lfo.stop(t+0.85);
+  const g2=a.createGain();g2.gain.value=0.18;g2.connect(g);osc(a,'sine',f*2,t,0.8,g2);
+  const n=a.createBufferSource(),len=Math.floor(a.sampleRate*0.8),b=a.createBuffer(1,len,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<len;i++)c[i]=Math.random()*2-1;n.buffer=b;const bp=a.createBiquadFilter();bp.type='bandpass';bp.frequency.value=f;bp.Q.value=2;const ng=a.createGain();ng.gain.value=0.25;n.connect(bp);bp.connect(ng);ng.connect(g);n.start(t);},
+ marimba(a,f,t){const g=a.createGain();env(a,g,t,0.22,0.002,0.55);g.connect(a.destination);osc(a,'sine',f,t,0.6,g);const g2=a.createGain();env(a,g2,t,0.07,0.001,0.07);g2.connect(a.destination);osc(a,'sine',f*4,t,0.1,g2);const g3=a.createGain();env(a,g3,t,0.03,0.001,0.12);g3.connect(a.destination);osc(a,'sine',f*10,t,0.15,g3);},
+ synth(a,f,t){const lp=a.createBiquadFilter();lp.type='lowpass';lp.Q.value=6;lp.frequency.setValueAtTime(f*8,t);lp.frequency.exponentialRampToValueAtTime(f*2,t+0.3);const g=a.createGain();env(a,g,t,0.09,0.01,0.45);lp.connect(g);g.connect(a.destination);osc(a,'square',f,t,0.5,lp,-8);osc(a,'square',f,t,0.5,lp,8);osc(a,'sawtooth',f/2,t,0.5,lp);}};
+function playInst(name,m,delay){const a=ac();if(!a)return;if(vol()<=0)return;const f=440*Math.pow(2,(m-69)/12);try{INST[name](a,f,a.currentTime+0.01+(delay||0));}catch(e){}}
+window.bxPlayInst=playInst;
+const NN=['c','cs','d','ds','e','f','fs','g','gs','a','as','b'];
+const INAME={piano:'piano',bell:'bell',organ:'organ',pluck:'plucked string',bass:'bass',flute:'flute',marimba:'marimba',synth:'synth'};
+Object.keys(INST).forEach(inst=>{for(let o=2;o<=7;o++)NN.forEach((nn,i)=>reg('Music',inst+'_'+nn+o,`plays ${nn.toUpperCase().replace('S','#')}${o} on the ${INAME[inst]}`,'#'+inst+'_'+nn+o,()=>playInst(inst,12*(o+1)+i)));});
+const Q={major:[0,4,7],minor:[0,3,7],dim:[0,3,6],aug:[0,4,8],sus2:[0,2,7],sus4:[0,5,7],'7':[0,4,7,10],maj7:[0,4,7,11]};
+const QN={major:'major',minor:'minor',dim:'diminished',aug:'augmented',sus2:'sus2',sus4:'sus4','7':'seventh',maj7:'major seventh'};
+NN.forEach((nn,i)=>Object.entries(Q).forEach(([q,iv])=>reg('Music','chord_'+nn+'_'+q,`plays a ${nn.toUpperCase().replace('S','#')} ${QN[q]} chord on the piano`,'#chord_'+nn+'_'+q,()=>iv.forEach((s,j)=>playInst('piano',60+i+s,j*0.012)))));
+
+/* ---- drum kit ---- */
+function nz(a,t,d,type,fq,q,v,dec){const n=Math.floor(a.sampleRate*d),b=a.createBuffer(1,n,a.sampleRate),c=b.getChannelData(0);for(let i=0;i<n;i++)c[i]=Math.random()*2-1;const s=a.createBufferSource();s.buffer=b;const fl=a.createBiquadFilter();fl.type=type;fl.frequency.value=fq;fl.Q.value=q||1;const g=a.createGain();env(a,g,t,v,0.001,dec||d);s.connect(fl);fl.connect(g);g.connect(a.destination);s.start(t);s.stop(t+d+0.05);}
+function body(a,t,f1,f2,d,v,type){const o=a.createOscillator(),g=a.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f1,t);o.frequency.exponentialRampToValueAtTime(f2,t+d*0.6);env(a,g,t,v,0.002,d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+0.05);}
+const DR={kick:(a,t)=>{body(a,t,150,45,0.45,0.5);nz(a,t,0.02,'lowpass',3000,1,0.15,0.02);},snare:(a,t)=>{body(a,t,240,170,0.14,0.18,'triangle');nz(a,t,0.22,'highpass',1500,0.7,0.28,0.2);},
+ hihat:(a,t)=>nz(a,t,0.06,'highpass',8000,1,0.18,0.05),open_hihat:(a,t)=>nz(a,t,0.4,'highpass',7500,1,0.15,0.38),clap:(a,t)=>{[0,0.011,0.023].forEach(o=>nz(a,t+o,0.03,'bandpass',1200,1.5,0.3,0.03));nz(a,t+0.03,0.18,'bandpass',1100,1.2,0.22,0.16);},
+ tom_low:(a,t)=>body(a,t,120,80,0.4,0.35),tom_mid:(a,t)=>body(a,t,180,120,0.32,0.32),tom_high:(a,t)=>body(a,t,260,180,0.26,0.3),
+ crash:(a,t)=>{nz(a,t,1.6,'highpass',4500,0.6,0.2,1.5);nz(a,t,0.5,'bandpass',3000,0.8,0.1,0.45);},ride:(a,t)=>{nz(a,t,0.9,'bandpass',6000,2,0.1,0.85);body(a,t,2400,2350,0.6,0.03);},
+ cowbell:(a,t)=>{const bp=a.createBiquadFilter();bp.type='bandpass';bp.frequency.value=800;bp.Q.value=3;const g=a.createGain();env(a,g,t,0.25,0.001,0.35);bp.connect(g);g.connect(a.destination);osc(a,'square',540,t,0.4,bp);osc(a,'square',800,t,0.4,bp);},
+ shaker:(a,t)=>nz(a,t,0.1,'highpass',6000,0.8,0.12,0.09)};
+Object.keys(DR).forEach(k=>reg('Music','drum_'+k,`plays a drum sound: ${k.replace(/_/g,' ')}`,'#drum_'+k,()=>{const a=ac();if(!a||vol()<=0)return;DR[k](a,a.currentTime+0.01);}));
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
