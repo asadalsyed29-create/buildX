@@ -390,7 +390,7 @@ void main(){vec4 w=uM*vec4(aPos,1.);vW=w.xyz;vN=normalize(uN*aNor);vUv=aUv;vO=aP
 /* materials: 0 Plastic 1 SmoothPlastic 2 Neon 3 Glass 4 Metal 5 Wood 6 WoodPlanks 7 Brick 8 Concrete 9 Grass 10 Sand 11 Ice 12 Marble 13 Granite 14 Slate 15 DiamondPlate 16 Cobblestone 17 Fabric 18 Foil 19 CorrodedMetal 20 Snow 21 ForceField 22 Pebble 23 Studs 24 Truss 25 Rock 26 Carpet 27 CeramicTiles 28 Leather 29 Lava */
 const MATERIALS=['Plastic','SmoothPlastic','Neon','Glass','Metal','Wood','WoodPlanks','Brick','Concrete','Grass','Sand','Ice','Marble','Granite','Slate','DiamondPlate','Cobblestone','Fabric','Foil','CorrodedMetal','Snow','ForceField','Pebble','Studs','Truss','Rock','Carpet','CeramicTiles','Leather','Lava','Grid'];
 const FS=`#extension GL_OES_standard_derivatives : enable
-precision highp float;varying vec3 vW,vN,vO;varying vec2 vUv;uniform vec3 uCol,uSun,uEye,uFog,uAmb,uSunCol,uFT;uniform float uMat,uAlpha,uFace,uFogN,uFogF,uSel,uRefl,uTime,uGlow,uPortal;uniform sampler2D uTex,uPTex;uniform vec3 uSize;
+precision highp float;varying vec3 vW,vN,vO;varying vec2 vUv;uniform vec3 uCol,uSun,uEye,uFog,uAmb,uSunCol,uFT;uniform float uMat,uAlpha,uFace,uFogN,uFogF,uSel,uRefl,uTime,uGlow,uPortal,uPDecal;uniform vec3 uPSA,uPSB;uniform sampler2D uTex,uPTex;uniform vec3 uSize;
 float h21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float h31(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
 float n3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z);}
@@ -436,7 +436,12 @@ void main(){vec3 n=normalize(vN);if(!gl_FrontFacing)n=-n;vec3 c=uCol;float m=uMa
  if(m>2.5&&m<3.5)col+=vec3(0.25)*pow(1.-max(dot(n,V),0.),2.);
  col+=uGlow*c*0.6;
  if(fcol.a>0.)col=mix(col,fcol.rgb*min(vec3(1.),uAmb*0.8+uSunCol*0.6),fcol.a);
- if(uPortal>0.5&&abs(vO.z)>uSize.z*0.5-0.02){vec2 pu=vec2(0.5-sign(vO.z)*-1.*vO.x/uSize.x*-1.,0.5+vO.y/uSize.y);pu.x=vO.z<0.?0.5-vO.x/uSize.x:0.5+vO.x/uSize.x;float edge=smoothstep(0.0,0.015,min(min(pu.x,1.-pu.x),min(pu.y,1.-pu.y)));col=mix(vec3(0.02),texture2D(uPTex,pu).rgb,edge);}
+ if(uPortal>0.5){vec3 pe=uSize*0.5-abs(vO);if(min(pe.x,min(pe.y,pe.z))<0.02){float pon=0.;vec2 pu=vec2(0.5);
+  if(pe.z<=pe.x&&pe.z<=pe.y){pon=vO.z<0.?uPSB.z:uPSA.z;pu=vec2(vO.z<0.?0.5-vO.x/uSize.x:0.5+vO.x/uSize.x,0.5+vO.y/uSize.y);}
+  else if(pe.x<=pe.y){pon=vO.x<0.?uPSB.x:uPSA.x;pu=vec2(vO.x<0.?0.5+vO.z/uSize.z:0.5-vO.z/uSize.z,0.5+vO.y/uSize.y);}
+  else{pon=vO.y<0.?uPSB.y:uPSA.y;pu=vec2(vO.y<0.?0.5-vO.x/uSize.x:0.5+vO.x/uSize.x,0.5-vO.z/uSize.z);}
+  if(pon>0.5){vec4 pt=texture2D(uPTex,clamp(pu,0.,1.));if(uPDecal>0.5){vec3 lit=col/max(c,vec3(0.04));col=mix(col,pt.rgb*lit,pt.a);}
+   else{float edge=smoothstep(0.0,0.015,min(min(pu.x,1.-pu.x),min(pu.y,1.-pu.y)));col=mix(vec3(0.02),pt.rgb,edge);}}}}
  float fd=length(uEye-vW);col=mix(col,uFog,clamp((fd-uFogN)/max(1.,uFogF-uFogN),0.,1.));
  if(uSel>0.5)col=mix(col,vec3(0.25,0.62,1.),0.22+0.1*step(0.5,fract((vW.x+vW.y+vW.z)*1.5)));
  gl_FragColor=vec4(col,uAlpha);}`;
@@ -2202,7 +2207,7 @@ rigMatrices=function(pose){const s=pose.scale||1;let root=M4.mul(M4.mul(M4.tr(..
   out[p]=M4.mul(root,M4.mul(M4.tr(pv[0]+o[0],pv[1]+o[1],pv[2]+o[2]),M4.mul(eulerM(r),M4.mul(M4.sc(sc[0],sc[1],sc[2]),M4.tr(-pv[0],-pv[1],-pv[2])))));});return out;};
 
 /* ---- cameras & portals ---- */
-const camRe=/#\s*portal\s*=\s*([^\n:#]+)/i;
+const camRe=/#\s*portal\s*=\s*([^\n:#]+)/i;window.bxCamRe=camRe;
 function camLens(push,st,ref,sel){const base=M4.mul(M4.tr(...st.Position),eulerM(st.Orientation));const [sx,sy,sz]=st.Size;const d=Math.max(0.2,Math.min(sx,sy)*0.62),L=Math.max(0.2,Math.min(0.45,sz*0.3));
  push({m:M4.mul(base,M4.mul(M4.tr(0,0,-(sz/2+L/2)),M4.mul(eulerM([0,90,0]),M4.sc(L,d,d)))),mesh:GEO.Cylinder,col:'#23262d',mat:4,alpha:1,size:[L,d,d],sel},ref);
  push({m:M4.mul(base,M4.mul(M4.tr(0,0,-(sz/2+L+0.012)),M4.mul(eulerM([0,90,0]),M4.sc(0.03,d*0.74,d*0.74)))),mesh:GEO.Cylinder,col:'#123049',mat:3,alpha:1,refl:0.45,size:[0.03,d*0.74,d*0.74],sel},ref);
@@ -2211,18 +2216,18 @@ drawList=function(forPick){const L=[];pickTable=[];const push=(d,ref)=>{pickTabl
  if(window.bxPreviewBuild&&bxPreviewBuild(push))return L;
  const addPart=(st,ref,selOn,extra)=>{if(st.Transparency>=1&&!selOn)return;const m=partMatrix(st);push(Object.assign({m,mesh:GEO[st.Shape]||GEO.Block,col:st.Color,mat:matIndex(st.Shape==='Truss'?'Truss':st.Material),alpha:1-(st.Transparency||0)*(st.Transparency>=1?0.85:1),refl:st.Reflectance||0,size:st.Size,sel:selOn},extra||{}),ref);
   if((st.Camera||(ref&&(ref.o?bxCamNameOf(ref.o):ref.P&&(ref.P.camName||bxCamNameOf(ref.P.o)))))&&!(G&&st.Transparency>=1))camLens(push,st,ref,selOn);};
- if(G){G.parts.forEach(P=>{if(!P.alive)return;addPart(P.st,{P},false,{glow:P.glow?(P.glowNow??1):0,flash:P.flashT>0,portal:P.portal||null});});
+ if(G){G.parts.forEach(P=>{if(!P.alive)return;addPart(P.st,{P},false,Object.assign({glow:P.glow?(P.glowNow??1):0,flash:P.flashT>0},bxPX(P.st,P.portal,P.o&&P.o.code)));});
   G.humans.forEach(h=>{if(h.invis)return;if(h.dead&&!h.deadAnim)return;const pose=humanoidPose(h);const M=rigMatrices(pose);drawRig(push,M,h.look||lookOf({}),{h},false,h.ghost>0?0.5:1);
    if(!h.dead&&h.equipped&&h.tools.length){const tm={Sword:[[0.3,4,0.6],'#c0c0c0',4],'Speed Coil':[[1.2,1.2,1.2],'#ff8c00',2],'Gravity Coil':[[1.2,1.2,1.2],'#6225d1',2],Flashlight:[[0.5,0.5,2],'#333333',4],Rocket:[[0.8,0.8,2.4],'#ffffff',4]}[h.equipped]||[[1,1,1],'#888',0];
     const m=M4.mul(M['Right Arm'],M4.mul(M4.tr(-1.5,1.0+(h.equipped==='Sword'?-1.5:0),0.6),M4.sc(...tm[0])));push({m,mesh:GEO.Block,col:tm[1],mat:tm[2],alpha:1,size:tm[0]},{h});}});
   G.bodies.forEach(b=>{if(!b.limb||!b.alive)return;drawLimbBody(push,b);});}
  else{S.items.forEach(o=>{if(!inWorkspace(o))return;const isSel=sel.some(id=>id===o.id||descendants(id).some(d=>d.id===o.id));
-   if(o.cls==='Part'){const m=o.code&&camRe.exec(o.code);addPart(o.props,{o},isSel,{portal:m?m[1].trim():null});}
+   if(o.cls==='Part'){const m=o.code&&camRe.exec(o.code);addPart(o.props,{o},isSel,bxPX(o.props,m?m[1].trim():null,o.code));}
    else if(o.cls==='Bot'){const p=o.props;drawRig(push,rigMatrices({pos:p.Position,yaw:p.Yaw,scale:p.Scale||1,joints:{}}),lookOf(p),{o},isSel);}});}
  return L;};
 
 /* portal render targets */
-const PORT={};let curPortal=null;const blackTex=(()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([8,10,14,255]));return t;})();
+const PORT={};window.bxPORT=PORT;let curPortal=null;const blackTex=(()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([8,10,14,255]));return t;})();
 function portalTarget(name,w,h){let T=PORT[name];if(T&&T.w===w&&T.h===h)return T;if(T){gl.deleteTexture(T.tex);gl.deleteRenderbuffer(T.rb);gl.deleteFramebuffer(T.fb);}
  T={w,h,tex:gl.createTexture(),rb:gl.createRenderbuffer(),fb:gl.createFramebuffer(),ready:false};gl.bindTexture(gl.TEXTURE_2D,T.tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
  [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]].forEach(([a,b])=>gl.texParameteri(gl.TEXTURE_2D,a,b));
@@ -2262,7 +2267,7 @@ render=function(forPick,V){
  const opq=L.filter(d=>d.alpha>=0.999).sort((a,b)=>a.mat-b.mat),tr=L.filter(d=>d.alpha<0.999).map(d=>({d,z:len(sub([d.m[12],d.m[13],d.m[14]],eye))})).sort((a,b)=>b.z-a.z).map(x=>x.d);
  const one=d=>{useMat(d.mat);gl.uniformMatrix4fv(PR.u.uM,false,d.m);gl.uniformMatrix3fv(PR.u.uN,false,M4.nrm(d.m));gl.uniform3fv(PR.u.uCol,d.flash?[1,1,1]:hex2rgb(d.col));gl.uniform1f(PR.u.uMat,d.mat);gl.uniform1f(PR.u.uAlpha,d.alpha);gl.uniform1f(PR.u.uFace,d.face?1:0);
   if(d.face){gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,d.tex||faceTex);}
-  if(PR.u.uPortal){if(d.portal){const T=PORT[d.portal];gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,T&&T.ready&&curPortal!==d.portal?T.tex:blackTex);gl.activeTexture(gl.TEXTURE0);gl.uniform1f(PR.u.uPortal,1);}else gl.uniform1f(PR.u.uPortal,0);}
+  if(PR.u.uPortal){if(d.portal){const T=PORT[d.portal];gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,T&&T.ready&&curPortal!==d.portal?T.tex:blackTex);gl.activeTexture(gl.TEXTURE0);gl.uniform1f(PR.u.uPortal,T||!d.decal?1:0);const ps=d.psides||[[0,0,1],[0,0,1]];if(PR.u.uPSA){gl.uniform3fv(PR.u.uPSA,ps[0]);gl.uniform3fv(PR.u.uPSB,ps[1]);}if(PR.u.uPDecal)gl.uniform1f(PR.u.uPDecal,d.decal?1:0);}else gl.uniform1f(PR.u.uPortal,0);}
   gl.uniform1f(PR.u.uRefl,d.refl||0);gl.uniform1f(PR.u.uGlow,d.glow||0);gl.uniform3fv(PR.u.uSize,d.size||[1,1,1]);gl.uniform1f(PR.u.uSel,d.sel?1:0);bindMesh(PR,d.mesh);gl.drawElements(gl.TRIANGLES,d.mesh.c,d.mesh.t,0);};
  gl.disable(gl.BLEND);opq.forEach(one);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);tr.forEach(one);gl.depthMask(true);gl.disable(gl.BLEND);
  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,blackTex);gl.activeTexture(gl.TEXTURE0);};
@@ -2930,6 +2935,63 @@ window.bxCubeDraw=function(push,M,look,ref,selOn,alpha,hi){alpha=alpha==null?1:a
 /* when it breaks, each piece is a small cube */
 window.bxCubeChunk=function(push,b){const h=b.hum,look=h.look||bxLookOf({});const m=M4.mul(M4.fromR(b.R,b.st.Position),M4.sc(h.size||1,h.size||1,h.size||1));
  push({m,mesh:CHUNK,col:look.colors.Torso,mat:matIndex(look.mats.Torso||'SmoothPlastic'),alpha:1,size:[1.35,1.35,1.35]},{limb:b});};
+})();
+
+/* ================= 8. portal sides + spawn pad marking ================= */
+(function(){
+/* sides: [+x Right, +y Top, +z Back] and [-x Left, -y Bottom, -z Front] */
+const SIDES=['Front','Back','Left','Right','Top','Bottom'];
+function sidesOf(st){const S=st&&st.PortalSides;return S&&typeof S==='object'?S:{Front:true,Back:true};}
+function sideVec(st){const s=sidesOf(st),b=k=>s[k]?1:0;return [[b('Right'),b('Top'),b('Back')],[b('Left'),b('Bottom'),b('Front')]];}
+window.bxPortalSides=sidesOf;
+
+/* ---- the spawn pad marking, painted on the top face ---- */
+const SPT={};
+function spawnTex(st){const asp=Math.max(0.25,Math.min(4,st.Size[0]/Math.max(0.01,st.Size[2])));const key='__spawn_'+asp.toFixed(2);if(bxPORT[key])return key;
+ const W=asp>=1?512:Math.round(512*asp),H=asp>=1?Math.round(512/asp):512;const cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d');
+ const m=Math.min(W,H);let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+ const ink='#2a2e37',acc='#5b6cff';
+ /* inset border band, like tape on a floor */
+ const bi=m*0.045,bw=m*0.05;x.fillStyle=ink;x.globalAlpha=0.82;
+ x.beginPath();x.roundRect(bi,bi,W-bi*2,H-bi*2,m*0.06);x.roundRect(bi+bw,bi+bw,W-(bi+bw)*2,H-(bi+bw)*2,m*0.035);x.fill('evenodd');
+ /* corner brackets in the accent colour */
+ x.globalAlpha=0.95;x.strokeStyle=acc;x.lineWidth=m*0.03;x.lineCap='butt';const ci=bi+bw+m*0.05,cl=m*0.12;
+ [[ci,ci,1,1],[W-ci,ci,-1,1],[ci,H-ci,1,-1],[W-ci,H-ci,-1,-1]].forEach(([px,py,sx,sy])=>{x.beginPath();x.moveTo(px,py+sy*cl);x.lineTo(px,py);x.lineTo(px+sx*cl,py);x.stroke();});
+ /* centre badge: ring, disc, and a little cube (the player) */
+ const cx=W/2,cy=H/2,R=m*0.25;x.globalAlpha=0.9;x.fillStyle=ink;x.beginPath();x.arc(cx,cy,R*1.16,0,7);x.fill();
+ x.globalAlpha=1;x.fillStyle=acc;x.beginPath();x.arc(cx,cy,R,0,7);x.fill();
+ x.strokeStyle='rgba(255,255,255,0.9)';x.lineWidth=m*0.012;x.beginPath();x.arc(cx,cy,R*0.88,0,7);x.stroke();
+ const s=R*0.46,k=0.5;const T=[cx,cy-s*0.98],Lm=[cx-s*0.87,cy-s*k],Rm=[cx+s*0.87,cy-s*k],C=[cx,cy],Lb=[cx-s*0.87,cy+s*k],Rb=[cx+s*0.87,cy+s*k],B=[cx,cy+s*0.98];
+ const face=(pts,col)=>{x.fillStyle=col;x.beginPath();x.moveTo(...pts[0]);pts.slice(1).forEach(p=>x.lineTo(...p));x.closePath();x.fill();};
+ face([T,Rm,C,Lm],'#ffffff');face([Lm,C,B,Lb],'#dfe3ff');face([C,Rm,Rb,B],'#b8c0ff');
+ x.strokeStyle='#2c3596';x.lineWidth=m*0.009;x.lineJoin='round';[[T,Rm,Rb,B,Lb,Lm,T],[Lm,C,Rm],[C,B]].forEach(l=>{x.beginPath();x.moveTo(...l[0]);l.slice(1).forEach(p=>x.lineTo(...p));x.stroke();});
+ /* scuffs: the paint is worn in places */
+ x.globalCompositeOperation='destination-out';for(let i=0;i<220;i++){const px=rnd()*W,py=rnd()*H,r=(0.6+rnd()*rnd()*3.2)*m/512;x.globalAlpha=0.25+rnd()*0.6;x.beginPath();x.ellipse(px,py,r*(1+rnd()*2),r,rnd()*3,0,7);x.fill();}
+ for(let i=0;i<14;i++){const px=rnd()*W,py=rnd()*H,a=rnd()*3.14,l=m*(0.03+rnd()*0.08);x.globalAlpha=0.35;x.lineWidth=m*0.004;x.beginPath();x.moveTo(px,py);x.lineTo(px+Math.cos(a)*l,py+Math.sin(a)*l);x.stroke();}
+ x.globalCompositeOperation='source-over';x.globalAlpha=1;
+ const tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,cv);
+ [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]].forEach(([a,b])=>gl.texParameteri(gl.TEXTURE_2D,a,b));
+ bxPORT[key]={w:W,h:H,tex,ready:true,decal:true};window.bxSpawnCanvas=cv;return key;}
+const spRe=/#\s*spawn\s*($|\n|#)/i;
+window.bxPX=function(st,portal,code){
+ if(portal)return {portal,psides:sideVec(st)};
+ if((st.Spawn||(code&&spRe.test(code)))&&(st.Shape==='Block'||st.Shape==='Spawn'||!st.Shape))return {portal:spawnTex(st),psides:[[0,1,0],[0,0,0]],decal:1};
+ return {portal:null};};
+
+/* touching a portal only counts on its portal sides */
+const _isT=isTouching;
+isTouching=function(h,what,c){const r=_isT(h,what,c);if(!r||!c||!c.P||c.P.kind!=='part'||!c.P.portal||(what&&!['self','this','it'].includes(what)))return r;
+ const st=c.P.st;const s=sidesOf(st);if(SIDES.every(k=>s[k]))return r;const R=eulerR(st.Orientation||[0,0,0]);const sz=h.size||1;const d=sub([h.pos[0],h.pos[1]+1.5*sz,h.pos[2]],st.Position);
+ const l=[0,1,2].map(i=>d[0]*R[i][0]+d[1]*R[i][1]+d[2]*R[i][2]);const q=l.map((v,i)=>v/(st.Size[i]/2+1.5*sz));let ax=0;[1,2].forEach(i=>{if(Math.abs(q[i])>Math.abs(q[ax]))ax=i;});
+ const side=[['Left','Right'],['Bottom','Top'],['Front','Back']][ax][l[ax]>0?1:0];return !!s[side];};
+
+/* Properties: a little cube net of side toggles for portal parts */
+const st0=document.createElement('style');st0.textContent=`.psnet{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;max-width:220px}.psnet button{font:inherit;font-size:11px;padding:5px 0;border-radius:5px;border:1px solid var(--ln);background:var(--pn2);color:var(--mu);cursor:pointer}.psnet button.on{background:#3a4bd8;border-color:#5b6cff;color:#fff}.psnet i{visibility:hidden}`;document.head.appendChild(st0);
+const _rp=refreshProps;refreshProps=function(){_rp();const pp=$('props');const o=typeof sel[0]==='number'?byId(sel[0]):null;if(!o||o.cls!=='Part'||!o.code||!bxCamRe.exec(o.code))return;
+ const s=sidesOf(o.props);const b=k=>`<button data-ps="${k}" class="${s[k]?'on':''}">${k}</button>`;
+ const w=document.createElement('div');w.innerHTML=propRow('Portal sides',`<div class="psnet"><i></i>${b('Top')}<i></i><i></i>${b('Left')}${b('Front')}${b('Right')}${b('Back')}<i></i>${b('Bottom')}<i></i><i></i></div>`);
+ const row=w.firstChild;const cb=pp.querySelector('#pcode');if(cb)cb.before(row);else pp.append(row);
+ row.querySelectorAll('[data-ps]').forEach(el=>el.onclick=()=>{const cur=Object.assign({},sidesOf(o.props));cur[el.dataset.ps]=!cur[el.dataset.ps];sel.map(byId).filter(x=>x&&x.cls==='Part').forEach(x=>x.props.PortalSides=Object.assign({},cur));commit();refreshProps();});};
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
