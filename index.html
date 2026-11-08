@@ -2645,12 +2645,12 @@ const _tp=togglePlay;togglePlay=function(){closeStudios();_tp();};
 (function(){
 const guisD=()=>{S.guis=S.guis||[];return S.guis;};window.guis=()=>G&&G.guiData?G.guiData:guisD();
 const uid=()=>Math.random().toString(36).slice(2,9);
-const TYPES=[['Frame','⬛','Frame'],['Text','🔤','Text'],['Button','🔘','Button'],['Image','🖼️','Image'],['TextBox','⌨️','Text box'],['Scroll','📜','Scroll box'],['Dropdown','▾','Dropdown'],['Slider','🎚','Slider'],['Toggle','🔁','Toggle'],['Progress','📊','Progress bar']];
+const TYPES=[['Frame','⬛','Frame'],['Text','🔤','Text'],['Button','🔘','Button'],['Image','🖼️','Image'],['TextBox','⌨️','Text box'],['Scroll','📜','Scroll box'],['Dropdown','▾','Dropdown'],['Slider','🎚','Slider'],['Toggle','🔁','Toggle'],['Progress','📊','Progress bar'],['Slot','▢','Inventory slot']];
 const GDEF={Frame:{w:40,h:44,bg:'#1d2230',alpha:0.88,radius:16,text:''},Text:{w:30,h:8,bg:'#000000',alpha:0,text:'Hello!',size:26,color:'#ffffff',bold:true},
  Button:{w:18,h:8,bg:'#3d8bff',alpha:1,radius:12,text:'Click me',size:20,color:'#ffffff',bold:true,hover:'none'},Image:{w:16,h:22,bg:'#ffffff',alpha:0,radius:10,img:'',fit:'contain'},
  TextBox:{w:28,h:7,bg:'#ffffff',alpha:1,radius:10,text:'',placeholder:'Type here…',size:18,color:'#15171c',var:'answer'},Scroll:{w:30,h:42,bg:'#1d2230',alpha:0.88,radius:14,content:260},
  Dropdown:{w:24,h:7,bg:'#ffffff',alpha:1,radius:10,options:'Red, Blue, Green',value:'Red',size:18,color:'#15171c',var:'choice'},Slider:{w:26,h:5,bg:'#2b2f3a',alpha:1,radius:20,min:0,max:100,value:50,color:'#3d8bff',var:'volume'},
- Toggle:{w:9,h:6,bg:'#555b68',alpha:1,radius:40,value:0,color:'#2fbf5b',var:'switch'},Progress:{w:30,h:4.5,bg:'#2b2f3a',alpha:1,radius:12,value:70,max:100,color:'#2fbf5b',var:'',text:''}};
+ Toggle:{w:9,h:6,bg:'#555b68',alpha:1,radius:40,value:0,color:'#2fbf5b',var:'switch'},Progress:{w:30,h:4.5,bg:'#2b2f3a',alpha:1,radius:12,value:70,max:100,color:'#2fbf5b',var:'',text:''},Slot:{w:8,h:12,bg:'#1d2230',alpha:0.82,radius:12,text:'',color:'#ffffff',size:14,code:'#hold = all'}};
 const FONTS={Rounded:'"Nunito","Arial Rounded MT Bold","Segoe UI",system-ui,sans-serif',Chunky:'"Arial Black",Impact,"Segoe UI Black",sans-serif',Handwritten:'"Comic Sans MS","Chalkboard SE","Marker Felt",cursive',Classic:'Georgia,"Times New Roman",serif',Typewriter:'"Courier New",ui-monospace,monospace',Clean:'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif'};
 const ENTER=['none','fade','pop','slide-up','slide-down','slide-left','slide-right','drop','spin','zoom'],LOOP=['none','pulse','bounce','float','shake','spin','wiggle','glow','rainbow','blink','heartbeat'],HOVER=['none','grow','shrink','lift','tilt','glow','brighten'];
 function newEl(type,over){return Object.assign({id:uid(),type,name:type+Math.floor(Math.random()*90+10),x:30,y:30,parent:null,z:1,visible:true,font:'Rounded',align:'center',stroke:0,strokeColor:'#000000',shadow:false,enter:'none',loop:'none',hover:'none',dur:0.5,code:''},clone(GDEF[type]),over||{});}
@@ -5104,6 +5104,8 @@ const css=document.createElement('style');css.textContent=`
 #bxinv .is{position:relative;flex:none;width:58px;height:58px;border-radius:12px;background:rgba(20,22,28,.72);border:2px solid rgba(255,255,255,.18);color:#fff;font:700 11px/1.1 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.3);backdrop-filter:blur(4px);touch-action:manipulation;user-select:none}
 #bxinv .is.empty{background:rgba(20,22,28,.4);border-style:dashed;cursor:default;box-shadow:none}
 #bxinv .is.on{border-color:#ffd24a;background:rgba(60,52,20,.8)}
+#bxinv .is img{width:30px;height:30px;object-fit:contain}
+#bxinv .is svg{width:30px;height:26px}
 #bxinv .is i{width:22px;height:22px;border-radius:7px;display:block;box-shadow:inset 0 -3px 0 rgba(0,0,0,.25),inset 0 2px 0 rgba(255,255,255,.35)}
 #bxinv .is span{max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 3px}
 #bxinv .is b{position:absolute;right:4px;top:3px;font-size:11px;color:#ffd24a}
@@ -5115,12 +5117,12 @@ const bar=document.createElement('div');bar.id='bxinv';$('view').appendChild(bar
 function colorOf(n){const src=S.items.find(o=>o.cls==='Part'&&nrmName(o.name)===nrmName(n));if(src&&src.props.Color)return src.props.Color;let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))>>>0;return `hsl(${h%360},62%,55%)`;}
 const GEMSVG=c=>`<svg viewBox="0 0 32 28" width="30" height="26"><path d="M8 2h16l7 8-15 17L1 10z" fill="${c}"/><path d="M8 2l-7 8h30l-7-8M1 10l15 17 15-17M8 2l4 8 4-8 4 8 4-8M12 10l4 17 4-17" fill="none" stroke="rgba(0,0,0,.28)" stroke-width="1"/><path d="M8 2h16l-4 8h-8z" fill="rgba(255,255,255,.38)"/><path d="M1 10h11l4 17z" fill="rgba(0,0,0,.16)"/></svg>`;
 const XSVG=c=>`<svg viewBox="0 0 20 32" width="18" height="28"><path d="M10 1l7 8v15l-7 7-7-7V9z" fill="${c}"/><path d="M10 1v30M3 9l7 4 7-4" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="1"/><path d="M10 1L3 9l7 4z" fill="rgba(255,255,255,.35)"/></svg>`;
-function iconOf(n){const src=S.items.find(o=>o.cls==='Part'&&nrmName(o.name)===nrmName(n));const c=colorOf(n);const sh=src&&src.props.Shape;if(sh==='Gem'||sh==='EmeraldCut'||sh==='Heart')return GEMSVG(c);if(sh==='Crystal')return XSVG(c);return `<i style="background:${c}"></i>`;}
+function iconOf(n){if(window.bxItemIcon)return bxItemIcon(n);const src=S.items.find(o=>o.cls==='Part'&&nrmName(o.name)===nrmName(n));const c=colorOf(n);const sh=src&&src.props.Shape;if(sh==='Gem'||sh==='EmeraldCut'||sh==='Heart')return GEMSVG(c);if(sh==='Crystal')return XSVG(c);return `<i style="background:${c}"></i>`;}
 let sig='';
 /* fixed slots: an item keeps its slot; when it runs out the slot stays empty until a new item fills it */
 function slots(h){const I=h.bxInv||{};const S2=h.bxSlots||(h.bxSlots=[]);for(let i=0;i<S2.length;i++)if(S2[i]&&!(I[S2[i]]>0))S2[i]=null;
  Object.keys(I).forEach(n=>{if(!(I[n]>0)||S2.includes(n))return;const e=S2.indexOf(null);if(e>=0)S2[e]=n;else S2.push(n);});while(S2.length<6)S2.push(null);return S2;}
-function draw(){const on=G&&G.player&&sg('ShowInventory',true);const I=on?(G.player.bxInv||{}):{};
+function draw(){const on=G&&G.player&&sg('ShowInventory',true)&&!(window.bxHasSlots&&bxHasSlots());const I=on?(G.player.bxInv||{}):{};
  if(!on||!G.player.bxSlots&&!Object.values(I).some(k=>k>0)){if(bar.style.display!=='none'){bar.style.display='none';sig='';}return;}
  const SL=slots(G.player);const s=JSON.stringify(SL.map(n=>n&&[n,I[n]]))+'|'+(G.player.bxHeld||'');if(s===sig)return;sig=s;bar.style.display='flex';
  bar.innerHTML=SL.map((n,i)=>n?`<div class="is${G.player.bxHeld===n?' on':''}" data-n="${esc(n)}">${i<9?`<small>${i+1}</small>`:''}${iconOf(n)}<span>${esc(n)}</span>${I[n]>1?`<b>${I[n]}</b>`:''}</div>`:`<div class="is empty">${i<9?`<small>${i+1}</small>`:''}</div>`).join('');}
@@ -5174,14 +5176,14 @@ reg('Items','spawn_randomly','copies something from Storage to random spots on t
 const _gs=gameStep;gameStep=function(dt){_gs.apply(this,arguments);if(!G)return;
  if(G.bxSpawners&&G.bxSpawners.length){const base=G.parts.find(P=>P.isBase&&P.alive!==false);const half=base?[Math.min(60,Math.max(10,base.st.Size[0]/2-6)),Math.min(60,Math.max(10,base.st.Size[2]/2-6))]:[60,60];const c0=base?base.st.Position:[0,0,0];const top=base?c0[1]+base.st.Size[1]/2:0;
   G.bxSpawners.forEach(sp=>{if(G.t<sp.next)return;sp.next=G.t+sp.every;const n=sp.names[Math.floor(Math.random()*sp.names.length)];const all=G.parts.filter(P=>P.alive!==false&&nrmName(P.o.name)===nrmName(n)).length;if(all>=sp.max)return;
-   const x=c0[0]+(Math.random()*2-1)*half[0],z=c0[2]+(Math.random()*2-1)*half[1];try{CMDS.copy_from_storage.fn({P:{kind:'script'}},n+' : '+x.toFixed(1)+', '+(top+2).toFixed(1)+', '+z.toFixed(1));}catch(e){console.error(e);}});}
+   const pos=bxSpawnPos(sp,c0,half,top);if(!pos)return;try{CMDS.copy_from_storage.fn({P:{kind:'script'}},n+' : '+pos.map(v=>v.toFixed(1)).join(', '));}catch(e){console.error(e);}});}
  const hs=G.humans||[G.player];G.parts.forEach(P=>{if(!P.bxCollect||P.alive===false)return;const r=Math.max(...P.st.Size)/2+1.6;
   for(const h of hs){if(!h||h.dead)continue;const d=len(sub(add(h.pos,[0,2.5,0]),P.st.Position));if(d<r+1){if(CMDS.add_item&&CMDS.add_item.hum)CMDS.add_item.hum({P},h,P.o.name+' : 1');P.alive=false;break;}}});};
 
 /* the five gems: [name, shape, size, color, value] */
 const GEMS=[['Diamond','Gem',[2.2,1.7,2.2],'#e8f6ff'],['Ruby','Gem',[2,1.55,2],'#e0153a'],['Emerald','EmeraldCut',[2.4,1.5,1.9],'#12b85a'],['Sapphire','Gem',[2,1.55,2],'#1f4fe0'],['Amethyst','Crystal',[1.3,2.6,1.3],'#9b3fe0']];
 const gemCode=n=>`#collectable\n#spin = 90\n#bob = 1`;
-const SPAWNER=`#spawn_randomly = ${GEMS.map(g=>g[0]).join(', ')}`;
+const SPAWNER=`#randomly_spawn = ${GEMS.map(g=>g[0]).join(', ')}`;
 function installGemHunt(){if(G)return;const made=[];
  GEMS.forEach(([n,sh,sz,col])=>{if(S.items.some(o=>o.parent==='Storage'&&nrmName(o.name)===nrmName(n)))return;const o=mk('Part',n,{Shape:sh,Size:sz.slice(),Position:[0,sz[1]/2,0],Color:col,Material:'Glass',Transparency:0.12,Reflectance:0.25,Anchored:true,CanCollide:false},'Storage',gemCode(n));S.items.push(o);made.push(o);});
  if(!S.items.some(o=>o.cls==='Script'&&o.name==='Gem Spawner')){const s=mk('Script','Gem Spawner',{},'Scripts',SPAWNER);S.items.push(s);made.push(s);}
@@ -5191,6 +5193,124 @@ window.bxInstallGemHunt=installGemHunt;
 const SCR=window.bxScripts;if(SCR&&!SCR.some(s=>s.kit)){SCR.push({c:'Kits',n:'Gem Hunt',i:'◆',d:'Random gems appear around the map. Touch them to collect them into your inventory',code:'',kit:installGemHunt});}
 const _rt=refreshToolbox;refreshToolbox=function(){_rt.apply(this,arguments);document.querySelectorAll('#tblist .scr').forEach(b=>{const s=SCR[+b.dataset.s];if(s&&s.kit){b.onpointerdown=e=>e.stopPropagation();b.onclick=e=>{e.preventDefault();s.kit();};}});};
 try{refreshToolbox();}catch(e){}
+})();
+
+/* ================= 23. easy inventory: GUI inventory slots (#hold), item icons (import or make with shapes), #randomly_spawn + #except_zone ================= */
+(function(){
+const css=document.createElement('style');css.textContent=`
+.gx:has(>.gt-Slot){container-type:size}
+.gi.gt-Slot{inset:auto;left:50%;top:50%;width:min(100cqw,100cqh);height:min(100cqw,100cqh);translate:-50% -50%}
+.gt-Slot .gsi img{width:100%;height:100%;object-fit:contain}
+.gt-Slot{flex-direction:column;justify-content:center;gap:4%;cursor:pointer}
+.gt-Slot .gsi{width:62%;height:52%;display:flex;align-items:center;justify-content:center}.gt-Slot .gsi>*{max-width:100%;max-height:100%}
+.gt-Slot .gsi i{display:block;width:70%;height:80%;border-radius:18%;box-shadow:inset 0 -3px 0 rgba(0,0,0,.25),inset 0 2px 0 rgba(255,255,255,.35)}
+.gt-Slot .gsn{font-size:calc(var(--gs) * 12);font-weight:700;max-width:92%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.95}
+.gt-Slot .gsc{position:absolute;right:7%;top:5%;font-size:calc(var(--gs) * 13);color:#ffd24a;font-weight:800}
+.gt-Slot.held{outline:3px solid #ffd24a;outline-offset:-3px}
+.gt-Slot .gsph{width:46%;height:46%;border:2px dashed rgba(255,255,255,.35);border-radius:22%}
+/* icon maker */
+#icmk{position:fixed;inset:0;z-index:300;background:rgba(8,9,12,.72);display:flex;align-items:center;justify-content:center;padding:12px}
+#icmk .box{background:#202228;border:1px solid var(--ln);border-radius:16px;padding:12px;width:min(420px,100%);max-height:100%;overflow:auto;color:var(--tx);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+#icmk h3{margin:0 0 8px;font-size:15px;color:#fff}
+#icmk .cv{width:100%;aspect-ratio:1;background:repeating-conic-gradient(#2b2e36 0 25%,#24262d 0 50%) 0 0/24px 24px;border-radius:12px;touch-action:none;display:block}
+#icmk .row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+#icmk .row button{font:inherit;font-size:12.5px;border:1px solid var(--ln);background:#1b1c20;color:var(--tx);border-radius:9px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:6px}
+#icmk .row button svg{width:16px;height:16px}
+#icmk .row button.ok{background:#22a35a;border-color:#22a35a;color:#fff}#icmk .row button.dim{opacity:.45;pointer-events:none}
+#icmk .hint{font-size:11.5px;color:var(--mu);margin-top:6px}
+.pic-ic{width:40px;height:40px;border-radius:8px;background:#15161a;border:1px solid var(--ln);display:flex;align-items:center;justify-content:center;flex:none}.pic-ic>*{max-width:34px;max-height:34px}`;document.head.appendChild(css);
+
+/* ---------- item icons ---------- */
+const srcPart=n=>S.items.find(o=>o.cls==='Part'&&nrmName(o.name)===nrmName(n));
+const colorOf=n=>{const p=srcPart(n);if(p&&p.props.Color)return p.props.Color;let h=0;for(const c of String(n))h=(h*31+c.charCodeAt(0))>>>0;return `hsl(${h%360},62%,55%)`;};
+const GEMSVG=c=>`<svg viewBox="0 0 32 28"><path d="M8 2h16l7 8-15 17L1 10z" fill="${c}"/><path d="M8 2l-7 8h30l-7-8M1 10l15 17 15-17M8 2l4 8 4-8 4 8 4-8M12 10l4 17 4-17" fill="none" stroke="rgba(0,0,0,.28)" stroke-width="1"/><path d="M8 2h16l-4 8h-8z" fill="rgba(255,255,255,.38)"/><path d="M1 10h11l4 17z" fill="rgba(0,0,0,.16)"/></svg>`;
+const XSVG=c=>`<svg viewBox="0 0 20 32"><path d="M10 1l7 8v15l-7 7-7-7V9z" fill="${c}"/><path d="M10 1v30M3 9l7 4 7-4" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="1"/><path d="M10 1L3 9l7 4z" fill="rgba(255,255,255,.35)"/></svg>`;
+function itemIcon(n){const p=srcPart(n);const c=colorOf(n);if(p&&p.props.Icon)return `<img src="${p.props.Icon}" alt="" draggable="false">`;const sh=p&&p.props.Shape;
+ if(sh==='Gem'||sh==='EmeraldCut'||sh==='Heart')return GEMSVG(c);if(sh==='Crystal')return XSVG(c);return `<i style="background:${c}"></i>`;}
+window.bxItemIcon=itemIcon;
+
+/* ---------- inventory slots you place in the GUI editor ---------- */
+const holdOf=el=>{const m=String(el.code||'').match(/#\s*hold\s*=\s*([^\n]+)/i);return m?m[1].trim():'all';};
+reg('Items','hold','what an inventory slot shows: all = the next item you pick up, or a part name = only that item','#hold = all',()=>{});
+const hasSlots=()=>(S.guis||[]).some(g=>(g.els||[]).some(e=>e.type==='Slot'));window.bxHasSlots=hasSlots;
+function slotItems(){/* which item each slot shows */const h=G.player;const I=h.bxInv||{};const out={};const all=[];
+ (G.guiData||[]).forEach(g=>g.els.forEach(e=>{if(e.type!=='Slot')return;const w=holdOf(e);if(/^all$/i.test(w))all.push(e.id);else{const k=Object.keys(I).find(n=>nrmName(n)===nrmName(w))||w.toLowerCase();out[e.id]=k;}}));
+ const named=new Set(Object.values(out).map(nrmName));const SL=h.bxSlots||(h.bxSlots=[]);
+ for(let i=0;i<SL.length;i++)if(SL[i]&&!(I[SL[i]]>0))SL[i]=null;
+ Object.keys(I).forEach(n=>{if(!(I[n]>0)||SL.includes(n)||named.has(nrmName(n)))return;const e=SL.indexOf(null);if(e>=0&&e<all.length)SL[e]=n;else if(SL.length<all.length)SL.push(n);});
+ while(SL.length<all.length)SL.push(null);all.forEach((id,i)=>out[id]=SL[i]);return out;}
+function paintSlots(){if(!G||!G.player)return;const ly=$('bxgui');if(!ly)return;const nodes=ly.querySelectorAll('.gt-Slot');if(!nodes.length)return;const map=slotItems();const I=G.player.bxInv||{};
+ nodes.forEach(i=>{const id=i.closest('.gx').dataset.id;const n=map[id];const k=n?(I[n]||0):0;const sig=(n||'')+'|'+k+'|'+(G.player.bxHeld===n);if(i.dataset.sig===sig)return;i.dataset.sig=sig;
+  i.dataset.item=k>0?n:'';i.classList.toggle('held',!!n&&k>0&&G.player.bxHeld===n);
+  i.innerHTML=k>0?`<div class="gsi">${itemIcon(n)}</div><span class="gsn">${esc(n)}</span>${k>1?`<b class="gsc">${k}</b>`:''}`:'';});}
+const _hud=hud;hud=function(){_hud.apply(this,arguments);paintSlots();};
+document.addEventListener('click',e=>{if(!G||!e.target.closest)return;const i=e.target.closest('#bxgui.play .gt-Slot');if(!i||!i.dataset.item)return;const n=i.dataset.item,h=G.player;
+ if(h.bxHeld===n){CMDS.use_item&&CMDS.use_item.hum(null,h,n);if(!(h.bxInv||{})[n])h.bxHeld=null;}else CMDS.equip&&CMDS.equip.hum(null,h,n);i.dataset.sig='';paintSlots();},true);
+/* in the editor a slot shows an empty box, so you can see where items will go */
+new MutationObserver(()=>{document.querySelectorAll('#bxgui:not(.play) .gt-Slot:not([data-ph])').forEach(i=>{i.dataset.ph='1';if(!i.innerHTML.trim())i.innerHTML='<div class="gsph"></div><span class="gsn">'+esc((()=>{const id=i.closest('.gx').dataset.id;const el=(S.guis||[]).flatMap(g=>g.els).find(x=>x.id===id);return el?'#hold = '+holdOf(el):'';})())+'</span>';});}).observe(document.body,{childList:true,subtree:true});
+
+/* ---------- icon for a part: import a picture or make one from shapes ---------- */
+const SHAPES2={circle:'<circle cx="0" cy="0" r="50"/>',square:'<rect x="-50" y="-50" width="100" height="100" rx="8"/>',triangle:'<path d="M0-52L50 40H-50z"/>',diamond:'<path d="M0-55L45 0 0 55-45 0z"/>',
+ star:'<path d="M0-55L13-18 52-17 21 7 32 45 0 22-32 45-21 7-52-17-13-18z"/>',heart:'<path d="M0 45C-60 5-48-45-14-40-6-38 0-30 0-25 0-30 6-38 14-40 48-45 60 5 0 45z"/>',ring:'<path fill-rule="evenodd" d="M0-50a50 50 0 1 1-.1 0zM0-28a28 28 0 1 0 .1 0z"/>',gem:'<path d="M-25-40h50l25 22L0 50-50-18z"/>'};
+const shapeSvg=(L,sel)=>L.map((s,i)=>`<g transform="translate(${s.x} ${s.y}) rotate(${s.r||0}) scale(${s.w/100} ${s.h/100})" fill="${s.c}" data-i="${i}" style="cursor:move">${SHAPES2[s.t]||''}</g>`).join('')+
+ (sel!=null&&L[sel]?(s=>`<g transform="translate(${s.x} ${s.y}) rotate(${s.r||0})"><rect x="${-s.w/2}" y="${-s.h/2}" width="${s.w}" height="${s.h}" fill="none" stroke="#ff8a1f" stroke-width="2" stroke-dasharray="6 4" pointer-events="none"/><circle cx="${s.w/2}" cy="${s.h/2}" r="9" fill="#fff" stroke="#22c55e" stroke-width="4" data-h="sz"/><circle cx="0" cy="${-s.h/2-22}" r="9" fill="#fff" stroke="#ff8a1f" stroke-width="4" data-h="rot"/></g>`)(L[sel]):'');
+function iconMaker(o){const L=(o.props.IconShapes&&JSON.parse(JSON.stringify(o.props.IconShapes)))||[];let sel=null;const d=document.createElement('div');d.id='icmk';
+ d.innerHTML=`<div class="box"><h3>Make an icon for ${esc(o.name)}</h3><svg class="cv" viewBox="0 0 256 256"></svg>
+  <div class="row">${Object.keys(SHAPES2).map(k=>`<button data-add="${k}"><svg viewBox="-60 -60 120 120" fill="currentColor">${SHAPES2[k]}</svg>${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}</div>
+  <div class="row"><button id="ic_col">Color</button><button id="ic_up">Bring forward</button><button id="ic_dn">Send back</button><button id="ic_dup">Copy</button><button id="ic_del">Delete</button></div>
+  <div class="hint">Tap a shape to add it. Drag it to move, green dot to size, orange dot to turn.</div>
+  <div class="row"><button class="ok" id="ic_ok">Use this icon</button><button id="ic_x">Cancel</button></div><input type="color" id="ic_cin" style="display:none"></div>`;
+ document.body.appendChild(d);const cv=d.querySelector('.cv');
+ const draw=()=>{cv.innerHTML=shapeSvg(L,sel);['ic_col','ic_up','ic_dn','ic_dup','ic_del'].forEach(id=>$(id).classList.toggle('dim',sel==null));};
+ const pt=e=>{const r=cv.getBoundingClientRect();return [(e.clientX-r.left)/r.width*256,(e.clientY-r.top)/r.height*256];};
+ cv.onpointerdown=e=>{const h=e.target.dataset&&e.target.dataset.h;const g=e.target.closest('[data-i]');if(!h&&!g){sel=null;draw();return;}if(g)sel=+g.dataset.i;const s=L[sel];const p0=pt(e),s0=Object.assign({},s);cv.setPointerCapture(e.pointerId);
+  cv.onpointermove=ev=>{const p=pt(ev);if(h==='sz'){const a=-(s.r||0)*Math.PI/180;const dx=p[0]-s.x,dy=p[1]-s.y;const lx=dx*Math.cos(a)-dy*Math.sin(a),ly=dx*Math.sin(a)+dy*Math.cos(a);s.w=Math.max(8,Math.abs(lx)*2);s.h=Math.max(8,Math.abs(ly)*2);}
+   else if(h==='rot'){s.r=Math.round(Math.atan2(p[1]-s.y,p[0]-s.x)*180/Math.PI+90);}else{s.x=Math.round(s0.x+p[0]-p0[0]);s.y=Math.round(s0.y+p[1]-p0[1]);}draw();};
+  cv.onpointerup=()=>{cv.onpointermove=null;};draw();};
+ d.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{L.push({t:b.dataset.add,x:128+(L.length%3)*10-10,y:128+(L.length%3)*10-10,w:120,h:120,r:0,c:L.length?'#ffffff':(o.props.Color||'#3d8bff')});sel=L.length-1;draw();});
+ const cin=$('ic_cin');$('ic_col').onclick=()=>{if(sel==null)return;cin.value=L[sel].c&&L[sel].c[0]==='#'?L[sel].c:'#ffffff';cin.click();};cin.oninput=cin.onchange=()=>{if(sel!=null){L[sel].c=cin.value;draw();}};
+ $('ic_up').onclick=()=>{if(sel==null||sel>=L.length-1)return;[L[sel],L[sel+1]]=[L[sel+1],L[sel]];sel++;draw();};$('ic_dn').onclick=()=>{if(!sel)return;[L[sel],L[sel-1]]=[L[sel-1],L[sel]];sel--;draw();};
+ $('ic_dup').onclick=()=>{if(sel==null)return;L.push(Object.assign({},L[sel],{x:L[sel].x+12,y:L[sel].y+12}));sel=L.length-1;draw();};$('ic_del').onclick=()=>{if(sel==null)return;L.splice(sel,1);sel=null;draw();};
+ $('ic_x').onclick=()=>d.remove();
+ $('ic_ok').onclick=()=>{if(!L.length){d.remove();return;}const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">${shapeSvg(L,null).replace(/ data-i="\d+" style="cursor:move"/g,'')}</svg>`;
+  o.props.Icon='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svg)));o.props.IconShapes=L;commit();d.remove();refreshProps();};draw();}
+window.bxIconMaker=iconMaker;
+function importIcon(o){const f=document.createElement('input');f.type='file';f.accept='image/*';f.onchange=()=>{const file=f.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');const k=Math.min(1,128/Math.max(im.width,im.height));c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));c.getContext('2d').drawImage(im,0,0,c.width,c.height);o.props.Icon=c.toDataURL('image/png');delete o.props.IconShapes;commit();refreshProps();};im.onerror=()=>bxAlert('That file is not a picture BuildX can open.');im.src=r.result;};r.readAsDataURL(file);};f.click();}
+const _rp=refreshProps;refreshProps=function(){_rp.apply(this,arguments);const pp=$('props');const o=typeof sel[0]==='number'?byId(sel[0]):null;if(!pp||!o||o.cls!=='Part')return;
+ const w=document.createElement('div');w.className='pr';w.innerHTML=`<label>Inventory icon</label><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="pic-ic">${itemIcon(o.name)}</span><button class="tb" data-ic="make">Make</button><button class="tb" data-ic="imp">Import</button>${o.props.Icon?'<button class="tb" data-ic="del">Remove</button>':''}</div>`;
+ const cb=pp.querySelector('#pcode');if(cb)cb.before(w);else pp.appendChild(w);
+ w.querySelectorAll('[data-ic]').forEach(b=>b.onclick=()=>{const k=b.dataset.ic;if(k==='make')iconMaker(o);else if(k==='imp')importIcon(o);else{delete o.props.Icon;delete o.props.IconShapes;commit();refreshProps();}});};
+
+/* ---------- random spawning, the easy way ----------
+   On a part in Storage:  #randomly_spawn               (anywhere on the map)
+                          #randomly_spawn = Meadow      (only inside the part Meadow, which has #only_zone)
+                          #randomly_spawn = except = Lake   (anywhere but inside Lake; "except" alone = stay out of every #except_zone)
+   In a script:           #randomly_spawn = Diamond, Ruby   (copies those from Storage)            */
+const zoneParts=n=>G.parts.filter(P=>P.alive!==false&&nrmName(P.o.name)===nrmName(n));
+reg('Items','only_zone','an invisible area: #randomly_spawn = (this part name) puts things only inside it','#only_zone',(c)=>{if(c.P&&c.P.kind==='part'){c.P.bxOnly=true;hideZone(c.P);}});
+reg('Items','except_zone','an invisible area: #randomly_spawn = except = (this part name) keeps things out of it','#except_zone',(c)=>{if(c.P&&c.P.kind==='part'){c.P.bxExcept=true;hideZone(c.P);}});
+function hideZone(P){P.st.Transparency=1;P.collide=false;P.noCollide=true;if(P.st)P.st.CanCollide=false;}
+function splitExcept(s){const m=String(s||'').match(/^(.*?)\s*[=:]?\s*\bexcept\b\s*(?:[=:]\s*)?(.*)$/i);if(!m)return [String(s||'').trim(),false];return [m[1].trim(),m[2].trim()||true];}
+function addSpawner(names,arg,every){if(!G)return;const [rest,except]=splitExcept(arg);const only=rest.replace(/^=\s*/,'').trim()||null;
+ G.bxSpawners=G.bxSpawners||[];G.bxSpawners.push({names,every:every||3,next:G.t,max:30,except,only});}
+reg('Items','randomly_spawn','makes copies appear in random spots again and again. On a Storage part: #randomly_spawn, or = a zone name, or = except = a zone name','#randomly_spawn = Meadow',(c,a)=>{if(!G)return;if(c&&c.P&&c.P.kind==='part')return;/* copies made from Storage already know where they go */
+ let s=String(a||'').trim();let every=null;const tm=s.match(/:\s*([\d.]+\s*(?:s|sec|seconds|m|min)?)\s*$/i);if(tm){every=parseTime(tm[1]);s=s.slice(0,tm.index).trim();}
+ const [lhs,exc]=splitExcept(s);const parts=lhs.split(/\s*=\s*/);const first=parts[0]||'';const inStorage=n=>S.items.some(o=>o.parent==='Storage'&&nrmName(o.name)===nrmName(n));
+ const names=first.split(',').map(x=>x.trim()).filter(Boolean);
+ if(names.length&&names.every(inStorage)){addSpawner(names,parts.slice(1).join(' = ')+(exc?(' except '+(exc===true?'':exc)):''),every);return;}
+ out('⚠ #randomly_spawn: put it on a part in Storage, or name a Storage part like #randomly_spawn = Diamond');});
+/* Storage parts don't run code, so their #randomly_spawn lines are read when Play starts */
+const _sp=startPlay;startPlay=function(){const r=_sp.apply(this,arguments);if(!G)return r;
+ S.items.forEach(o=>{if(o.parent!=='Storage'||!o.code)return;o.code.split('\n').forEach(l=>{const m=l.match(/^\s*#\s*randomly_spawn\s*(?:=\s*(.*))?$/i);if(!m)return;let a=(m[1]||'').trim();let every=null;
+  const tm=a.match(/:\s*([\d.]+\s*(?:s|sec|seconds|m|min)?)\s*$/i);if(tm){every=parseTime(tm[1]);a=a.slice(0,tm.index).trim();}addSpawner([o.name],a,every);});});return r;};
+const inside=(p,P)=>{const B=P.obb||obbOfSt(P.st);const r=sub(p,B.c);for(let k=0;k<3;k++){const ax=B.ax[k];if(k!==1&&Math.abs(dot(r,ax))>B.h[k])return false;}return true;};
+function exceptHit(p,ex){if(!ex)return false;const L=ex===true?G.parts.filter(P=>P.bxExcept&&P.alive!==false):String(ex).split(',').flatMap(n=>zoneParts(n.trim()));return L.some(P=>{try{return inside(p,P);}catch(e){return false;}});}
+window.bxSpawnPos=function(sp,c0,half,top){
+ for(let t=0;t<30;t++){let p;
+  if(sp.only){const Z=zoneParts(sp.only);if(!Z.length){if(!sp.warned){sp.warned=1;out('⚠ no zone part called "'+sp.only+'"');}return null;}const P=Z[Math.floor(Math.random()*Z.length)];const B=P.obb||obbOfSt(P.st);
+   const u=(Math.random()*2-1)*B.h[0],w=(Math.random()*2-1)*B.h[2];p=add(add(B.c,mul(B.ax[0],u)),mul(B.ax[2],w));p[1]=B.c[1]-B.h[1]+1.5;}
+  else p=[c0[0]+(Math.random()*2-1)*half[0],top+2,c0[2]+(Math.random()*2-1)*half[1]];
+  if(!exceptHit(p,sp.except))return p;}return null;};
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
