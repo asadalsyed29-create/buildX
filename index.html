@@ -3092,6 +3092,283 @@ const h=$('codehead');if(h&&!$('codex')){const b=document.createElement('button'
  b.innerHTML='<svg width="16" height="16" viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
  b.onclick=()=>$('codeclose').click();const t=$('codetitle');t.after(b);b.style.order='';}})();
 
+/* ================= 12. base command batch 1: math, numbers, conversions, text, lists, tables ================= */
+(function(){
+const ADD=(cat,name,help,ex,fn,opt)=>{if(CMDS[name])return;reg(cat,name,help,ex,fn,opt);};
+const key=s=>String(s||'').trim().toLowerCase();
+const ev=s=>evalExpr(String(s==null?'':s).trim());
+const N=s=>{const v=ev(s);const n=parseFloat(v);return isFinite(n)?n:0;};
+const T=s=>{const v=ev(s);return v==null?'':(Array.isArray(v)?v.join(', '):String(v));};
+const splitArgs=s=>{const r=[];let d=0,cur='';for(const ch of String(s||'')){if(ch==='('||ch==='[')d++;if(ch===')'||ch===']')d--;if(ch===','&&d===0){r.push(cur);cur='';}else cur+=ch;}if(cur.trim()!==''||r.length)r.push(cur);return r.map(x=>x.trim());};
+const kva=a=>{const i=String(a).indexOf(':');return i<0?[key(a),'']:[key(String(a).slice(0,i)),String(a).slice(i+1).trim()];};
+const get=k=>getVar(k),set=(k,v)=>{if(G)G.vars[String(k).toLowerCase().trim()]=v;};
+const num=k=>{const v=parseFloat(get(k));return isFinite(v)?v:0;};
+const txt=k=>{const v=get(k);return v==null?'':(Array.isArray(v)?v.join(', '):String(v));};
+const lst=k=>{const v=get(k);if(Array.isArray(v))return v;if(v==null||v==='')return [];return String(v).split(',').map(x=>x.trim());};
+const fix=x=>typeof x==='number'?Math.round(x*1e9)/1e9:x;
+/* in place on one variable:  #name = x */
+const U=(cat,name,help,f)=>ADD(cat,name,help,'#'+name+' = x',(c,a)=>{const k=key(a);set(k,fix(f(num(k))));});
+const UT=(name,help,f,ex)=>ADD('Text',name,help,ex||'#'+name+' = msg',(c,a)=>{const k=key(a);set(k,f(txt(k)));});
+/* into a variable:  #name = result : args */
+const I=(cat,name,help,ex,f)=>ADD(cat,name,help,ex,(c,a)=>{const [k,r]=kva(a);set(k,fix(f(splitArgs(r),k)));});
+/* change a variable using values:  #name = x : args */
+const B=(cat,name,help,ex,f)=>ADD(cat,name,help,ex,(c,a)=>{const [k,r]=kva(a);set(k,fix(f(get(k),splitArgs(r),k)));});
+
+/* ---------- Math: functions on a number variable ---------- */
+const D=Math.PI/180;
+[['sin','sine (angle in radians)',Math.sin],['cos','cosine (angle in radians)',Math.cos],['tan','tangent (angle in radians)',Math.tan],
+ ['sin_deg','sine of an angle in degrees',x=>Math.sin(x*D)],['cos_deg','cosine of an angle in degrees',x=>Math.cos(x*D)],['tan_deg','tangent of an angle in degrees',x=>Math.tan(x*D)],
+ ['asin','arcsine, gives radians',Math.asin],['acos','arccosine, gives radians',Math.acos],['atan','arctangent, gives radians',Math.atan],
+ ['asin_deg','arcsine, gives degrees',x=>Math.asin(x)/D],['acos_deg','arccosine, gives degrees',x=>Math.acos(x)/D],['atan_deg','arctangent, gives degrees',x=>Math.atan(x)/D],
+ ['sinh','hyperbolic sine',Math.sinh],['cosh','hyperbolic cosine',Math.cosh],['tanh','hyperbolic tangent',Math.tanh],['asinh','inverse hyperbolic sine',Math.asinh],['acosh','inverse hyperbolic cosine',Math.acosh],['atanh','inverse hyperbolic tangent',Math.atanh],
+ ['ln','natural log',Math.log],['log10','log base 10',Math.log10],['log2','log base 2',Math.log2],['exp','e to the power of it',Math.exp],['exp2','2 to the power of it',x=>Math.pow(2,x)],['exp10','10 to the power of it',x=>Math.pow(10,x)],
+ ['cbrt','cube root',Math.cbrt],['square','multiplies it by itself',x=>x*x],['cube','x times x times x',x=>x*x*x],['reciprocal','1 divided by it',x=>x===0?0:1/x],
+ ['sign','-1 if negative, 0 if zero, 1 if positive',Math.sign],['trunc','cuts off the decimals (toward zero)',Math.trunc],['frac','keeps only the part after the decimal point',x=>x-Math.trunc(x)],
+ ['deg_to_rad','degrees to radians',x=>x*D],['rad_to_deg','radians to degrees',x=>x/D],['double','times 2',x=>x*2],['halve','divided by 2',x=>x/2],['triple','times 3',x=>x*3],
+ ['factorial','1×2×3×…×it (up to 170)',x=>{x=Math.floor(x);if(x<0)return 0;if(x>170)return Infinity;let r=1;for(let i=2;i<=x;i++)r*=i;return r;}],
+ ['fibonacci','the nth Fibonacci number (0,1,1,2,3,5…)',x=>{x=Math.max(0,Math.floor(x));let a=0,b=1;for(let i=0;i<x;i++)[a,b]=[b,a+b];return a;}],
+ ['triangle_number','1+2+…+it',x=>{x=Math.floor(x);return x*(x+1)/2;}],
+ ['digit_sum','adds up its digits (123 → 6)',x=>String(Math.abs(Math.trunc(x))).split('').reduce((s,d)=>s+ +d,0)],
+ ['digit_count','how many digits it has',x=>String(Math.abs(Math.trunc(x))).length],
+ ['reverse_digits','turns 123 into 321',x=>Math.sign(x||1)*parseInt(String(Math.abs(Math.trunc(x))).split('').reverse().join(''),10)],
+ ['next_prime','the first prime number bigger than it',x=>{let n=Math.floor(x)+1;if(n<2)n=2;while(!isPrime(n))n++;return n;}],
+ ['prev_prime','the biggest prime number smaller than it (0 if none)',x=>{let n=Math.ceil(x)-1;while(n>=2&&!isPrime(n))n--;return n<2?0:n;}],
+ ['collatz_steps','steps the Collatz game takes to reach 1',x=>{let n=Math.floor(x),s=0;if(n<1)return 0;while(n!==1&&s<10000){n=n%2?3*n+1:n/2;s++;}return s;}],
+ ['bit_not','flips every bit (~x)',x=>~x],['ones_count','how many 1 bits it has in binary',x=>{let n=Math.abs(Math.trunc(x))>>>0,c=0;while(n){c+=n&1;n>>>=1;}return c;}],
+ ['next_power_of_two','the next power of two at or above it',x=>x<=1?1:Math.pow(2,Math.ceil(Math.log2(x)))],
+ ['smooth','smooths a 0–1 value into an S-curve',x=>{const t=Math.min(1,Math.max(0,x));return t*t*(3-2*t);}],
+ ['ping_pong','bounces it between 0 and 1 (0,0.5,1,0.5,0…)',x=>{const t=((x%2)+2)%2;return t>1?2-t:t;}],
+ ['to_percent','turns 0.25 into 25',x=>x*100],['from_percent','turns 25 into 0.25',x=>x/100]
+].forEach(([n,h,f])=>U('Math',n,h,f));
+function isPrime(n){n=Math.floor(n);if(n<2)return false;if(n%2===0)return n===2;for(let i=3;i*i<=n;i+=2)if(n%i===0)return false;return true;}
+/* checks that store true/false */
+[['is_prime','is it a prime number?',x=>isPrime(x)],['is_even','is it even?',x=>Math.trunc(x)%2===0],['is_odd','is it odd?',x=>Math.abs(Math.trunc(x)%2)===1],['is_whole','is it a whole number?',x=>Number.isInteger(x)],
+ ['is_positive','is it above zero?',x=>x>0],['is_negative','is it below zero?',x=>x<0],['is_zero','is it exactly zero?',x=>x===0],['is_square','is it a perfect square (1,4,9…)?',x=>x>=0&&Number.isInteger(Math.sqrt(x))],
+ ['is_power_of_two','is it 1, 2, 4, 8, 16…?',x=>x>0&&Number.isInteger(Math.log2(x))],['is_fibonacci','is it in the Fibonacci sequence?',x=>{const t=v=>Number.isInteger(Math.sqrt(v));return x>=0&&(t(5*x*x+4)||t(5*x*x-4));}]
+].forEach(([n,h,f])=>I('Math',n,h+' Saves true or false','#'+n+' = answer : x',(A)=>f(N(A[0]))));
+
+/* two-number maths:  #name = x : value */
+[['hypot','length of the diagonal: √(x² + value²)',(x,v)=>Math.hypot(x,v)],['atan2','angle (radians) from x to a y value',(x,v)=>Math.atan2(v,x)],['atan2_deg','angle (degrees) from x to a y value',(x,v)=>Math.atan2(v,x)/D],
+ ['root','the value-th root of it (#root = x : 3 is the cube root)',(x,v)=>v===0?0:Math.sign(x)*Math.pow(Math.abs(x),1/v)],['log_base','log of it in any base',(x,v)=>Math.log(x)/Math.log(v)],
+ ['percent','value percent of it (#percent = x : 20)',(x,v)=>x*v/100],['increase_percent','makes it bigger by value percent',(x,v)=>x*(1+v/100)],['decrease_percent','makes it smaller by value percent',(x,v)=>x*(1-v/100)],
+ ['what_percent','what percent it is of value',(x,v)=>v===0?0:x/v*100],['round_to','rounds it to the nearest step (#round_to = x : 5)',(x,v)=>v?Math.round(x/v)*v:x],['round_up_to','rounds up to a step',(x,v)=>v?Math.ceil(x/v)*v:x],
+ ['round_down_to','rounds down to a step',(x,v)=>v?Math.floor(x/v)*v:x],['round_decimals','keeps this many decimals',(x,v)=>{const p=Math.pow(10,Math.max(0,Math.floor(v)));return Math.round(x*p)/p;}],
+ ['gcd','greatest common divisor with value',(x,v)=>{let a=Math.abs(Math.trunc(x)),b=Math.abs(Math.trunc(v));while(b)[a,b]=[b,a%b];return a;}],
+ ['lcm','least common multiple with value',(x,v)=>{let a=Math.abs(Math.trunc(x)),b=Math.abs(Math.trunc(v));if(!a||!b)return 0;let g=a,h=b;while(h)[g,h]=[h,g%h];return a/g*b;}],
+ ['bit_and','bitwise AND with value',(x,v)=>x&v],['bit_or','bitwise OR with value',(x,v)=>x|v],['bit_xor','bitwise XOR with value',(x,v)=>x^v],['shift_left','shifts its bits left',(x,v)=>x<<v],['shift_right','shifts its bits right',(x,v)=>x>>v],
+ ['approach','moves it toward value by at most 1 step (#approach = x : 10, 2)',null],['div_whole','whole-number division (7 : 2 → 3)',(x,v)=>v?Math.trunc(x/v):0],['remainder','what is left after dividing (7 : 2 → 1)',(x,v)=>v?x%v:0],
+ ['distance_1d','how far it is from value',(x,v)=>Math.abs(x-v)],['average_with','the average of it and value',(x,v)=>(x+v)/2],['bigger_of','keeps the bigger of it and value',(x,v)=>Math.max(x,v)],['smaller_of','keeps the smaller of it and value',(x,v)=>Math.min(x,v)]
+].forEach(([n,h,f])=>{if(!f)return;B('Math',n,h,'#'+n+' = x : 2',(cur,A)=>f(parseFloat(cur)||0,N(A[0])));});
+B('Math','approach','moves it toward a target by at most a step each time (#approach = x : 10, 2)','#approach = x : 10, 2',(cur,A)=>{const x=parseFloat(cur)||0,t=N(A[0]),s=Math.abs(N(A[1]||1));return Math.abs(t-x)<=s?t:x+Math.sign(t-x)*s;});
+B('Math','wrap','wraps it around between min and max, like a clock (#wrap = angle : 0, 360)','#wrap = angle : 0, 360',(cur,A)=>{const x=parseFloat(cur)||0,lo=N(A[0]),hi=N(A[1]);const r=hi-lo;return r?((((x-lo)%r)+r)%r)+lo:lo;});
+I('Math','lerp','the number part way between a and b (#lerp = x : 0, 100, 0.25 → 25)','#lerp = x : 0, 100, 0.25',A=>N(A[0])+(N(A[1])-N(A[0]))*N(A[2]));
+I('Math','inverse_lerp','how far a value is between a and b, from 0 to 1 (#inverse_lerp = t : 0, 100, 25 → 0.25)','#inverse_lerp = t : 0, 100, 25',A=>{const a=N(A[0]),b=N(A[1]);return b===a?0:(N(A[2])-a)/(b-a);});
+I('Math','remap','moves a value from one range into another (#remap = y : value, 0, 10, 0, 100)','#remap = y : 5, 0, 10, 0, 100',A=>{const v=N(A[0]),a=N(A[1]),b=N(A[2]),c=N(A[3]),d=N(A[4]);return b===a?c:c+(v-a)*(d-c)/(b-a);});
+I('Math','smoothstep','smooth 0–1 curve between two edges (#smoothstep = t : 0, 10, value)','#smoothstep = t : 0, 10, 4',A=>{const e0=N(A[0]),e1=N(A[1]);let t=e1===e0?0:(N(A[2])-e0)/(e1-e0);t=Math.min(1,Math.max(0,t));return t*t*(3-2*t);});
+I('Math','between','true if a value is between min and max','#between = ok : value, 1, 10',A=>{const v=N(A[0]);return v>=Math.min(N(A[1]),N(A[2]))&&v<=Math.max(N(A[1]),N(A[2]));});
+I('Math','distance_2d','straight-line distance between two points (x1,y1,x2,y2)','#distance_2d = d : 0, 0, 3, 4',A=>Math.hypot(N(A[2])-N(A[0]),N(A[3])-N(A[1])));
+I('Math','distance_3d','straight-line distance between two 3D points (x1,y1,z1,x2,y2,z2)','#distance_3d = d : 0,0,0, 1,2,2',A=>Math.hypot(N(A[3])-N(A[0]),N(A[4])-N(A[1]),N(A[5])-N(A[2])));
+I('Math','angle_between','angle in degrees from point 1 to point 2 (x1,y1,x2,y2)','#angle_between = a : 0,0, 1,1',A=>Math.atan2(N(A[3])-N(A[1]),N(A[2])-N(A[0]))/D);
+I('Math','pythagoras','the long side of a right triangle from the two short sides','#pythagoras = c : 3, 4',A=>Math.hypot(N(A[0]),N(A[1])));
+I('Math','circle_area','area of a circle from its radius','#circle_area = a : 5',A=>Math.PI*N(A[0])**2);
+I('Math','circle_circumference','distance around a circle from its radius','#circle_circumference = c : 5',A=>2*Math.PI*N(A[0]));
+I('Math','sphere_volume','volume of a ball from its radius','#sphere_volume = v : 2',A=>4/3*Math.PI*N(A[0])**3);
+I('Math','box_volume','volume of a box (width, height, depth)','#box_volume = v : 2, 3, 4',A=>N(A[0])*N(A[1])*N(A[2]));
+I('Math','triangle_area','area of a triangle (base, height)','#triangle_area = a : 4, 3',A=>N(A[0])*N(A[1])/2);
+I('Math','pi','saves π (3.14159…)','#pi = p',()=>Math.PI);I('Math','tau','saves τ = 2π','#tau = t',()=>Math.PI*2);I('Math','golden_ratio','saves φ = 1.618…','#golden_ratio = g',()=>(1+Math.sqrt(5))/2);I('Math','euler','saves e = 2.718…','#euler = e',()=>Math.E);
+I('Math','infinity','saves infinity','#infinity = big',()=>Infinity);
+I('Math','random_float','a random decimal number between min and max','#random_float = r : 0, 1',A=>N(A[0])+Math.random()*(N(A[1]||1)-N(A[0])));
+I('Math','random_chance','true this percent of the time (#random_chance = lucky : 25)','#random_chance = lucky : 25',A=>Math.random()*100<N(A[0]));
+I('Math','coin_flip','saves heads or tails','#coin_flip = side',()=>Math.random()<0.5?'heads':'tails');
+I('Math','dice','rolls one die with this many sides','#dice = roll : 6',A=>1+Math.floor(Math.random()*Math.max(1,N(A[0]||6))));
+I('Math','roll_dice','rolls dice written like 2d6 or 3d8+2','#roll_dice = total : 2d6',A=>{const m=String(A[0]||'').toLowerCase().replace(/\s/g,'').match(/^(\d*)d(\d+)([+-]\d+)?$/);if(!m)return 0;let s=0;for(let i=0;i<(+m[1]||1)&&i<100;i++)s+=1+Math.floor(Math.random()*+m[2]);return s+(+m[3]||0);});
+I('Math','random_sign','saves 1 or -1 at random','#random_sign = s',()=>Math.random()<0.5?-1:1);
+I('Math','random_gaussian','a random number that is usually near the middle (average, spread)','#random_gaussian = r : 0, 1',A=>{const u=1-Math.random(),v=Math.random();return N(A[0])+Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)*N(A[1]||1);});
+I('Math','random_pick','picks one of the things you list','#random_pick = food : apple, pear, plum',A=>A.length?ev(A[Math.floor(Math.random()*A.length)]):'');
+I('Math','random_weighted','picks a thing, with bigger weights picked more (thing=weight, …)','#random_weighted = loot : common=70, rare=25, epic=5',A=>{const it=A.map(x=>{const i=x.lastIndexOf('=');return i<0?[x,1]:[x.slice(0,i).trim(),N(x.slice(i+1))];});const tot=it.reduce((s,x)=>s+Math.max(0,x[1]),0);let r=Math.random()*tot;for(const [v,w] of it){r-=Math.max(0,w);if(r<0)return v;}return it.length?it[it.length-1][0]:'';});
+I('Math','random_color','saves a random color','#random_color = c',()=>'#'+Math.floor(Math.random()*16777216).toString(16).padStart(6,'0'));
+I('Math','random_letter','saves a random letter','#random_letter = l',()=>String.fromCharCode(97+Math.floor(Math.random()*26)));
+I('Math','random_id','saves a random code of letters and numbers','#random_id = code : 6',A=>{const n=Math.min(64,Math.max(1,N(A[0]||6)));let s='';const ch='abcdefghijkmnpqrstuvwxyz23456789';for(let i=0;i<n;i++)s+=ch[Math.floor(Math.random()*ch.length)];return s;});
+
+/* ---------- unit conversions ---------- */
+[['c_to_f','Celsius to Fahrenheit',x=>x*9/5+32],['f_to_c','Fahrenheit to Celsius',x=>(x-32)*5/9],['c_to_k','Celsius to Kelvin',x=>x+273.15],['k_to_c','Kelvin to Celsius',x=>x-273.15],
+ ['km_to_miles','kilometers to miles',x=>x/1.609344],['miles_to_km','miles to kilometers',x=>x*1.609344],['m_to_feet','meters to feet',x=>x/0.3048],['feet_to_m','feet to meters',x=>x*0.3048],
+ ['cm_to_inches','centimeters to inches',x=>x/2.54],['inches_to_cm','inches to centimeters',x=>x*2.54],['kg_to_pounds','kilograms to pounds',x=>x/0.45359237],['pounds_to_kg','pounds to kilograms',x=>x*0.45359237],
+ ['grams_to_ounces','grams to ounces',x=>x/28.349523125],['ounces_to_grams','ounces to grams',x=>x*28.349523125],['liters_to_gallons','liters to US gallons',x=>x/3.785411784],['gallons_to_liters','US gallons to liters',x=>x*3.785411784],
+ ['ml_to_cups','milliliters to US cups',x=>x/236.5882365],['cups_to_ml','US cups to milliliters',x=>x*236.5882365],['kmh_to_mph','km/h to mph',x=>x/1.609344],['mph_to_kmh','mph to km/h',x=>x*1.609344],
+ ['knots_to_kmh','knots to km/h',x=>x*1.852],['kmh_to_knots','km/h to knots',x=>x/1.852],['ms_to_kmh','meters per second to km/h',x=>x*3.6],['kmh_to_ms','km/h to meters per second',x=>x/3.6],
+ ['seconds_to_minutes','seconds to minutes',x=>x/60],['minutes_to_seconds','minutes to seconds',x=>x*60],['minutes_to_hours','minutes to hours',x=>x/60],['hours_to_minutes','hours to minutes',x=>x*60],
+ ['hours_to_days','hours to days',x=>x/24],['days_to_hours','days to hours',x=>x*24],['days_to_weeks','days to weeks',x=>x/7],['weeks_to_days','weeks to days',x=>x*7],['years_to_days','years to days',x=>x*365.25],
+ ['studs_to_meters','BuildX studs to meters (1 stud = 0.28 m)',x=>x*0.28],['meters_to_studs','meters to BuildX studs',x=>x/0.28],['acres_to_hectares','acres to hectares',x=>x*0.40468564224],['hectares_to_acres','hectares to acres',x=>x/0.40468564224],
+ ['kb_to_mb','kilobytes to megabytes',x=>x/1024],['mb_to_kb','megabytes to kilobytes',x=>x*1024],['mb_to_gb','megabytes to gigabytes',x=>x/1024],['gb_to_mb','gigabytes to megabytes',x=>x*1024],
+ ['joules_to_calories','joules to calories',x=>x/4.184],['calories_to_joules','calories to joules',x=>x*4.184],['psi_to_bar','psi to bar',x=>x*0.0689475729],['bar_to_psi','bar to psi',x=>x/0.0689475729],
+ ['hp_to_watts','horsepower to watts',x=>x*745.6998716],['watts_to_hp','watts to horsepower',x=>x/745.6998716],['light_years_to_km','light-years to kilometers',x=>x*9.4607304725808e12],['au_to_km','astronomical units to kilometers',x=>x*149597870.7]
+].forEach(([n,h,f])=>U('Math',n,'converts it: '+h,f));
+
+/* ---------- numbers as text ---------- */
+const ROM=[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+const ONES=['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'],TENS=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+function words(n){n=Math.trunc(n);if(n<0)return 'minus '+words(-n);if(n<20)return ONES[n];if(n<100)return TENS[Math.floor(n/10)]+(n%10?'-'+ONES[n%10]:'');if(n<1000)return ONES[Math.floor(n/100)]+' hundred'+(n%100?' and '+words(n%100):'');
+ for(const [v,w] of [[1e12,'trillion'],[1e9,'billion'],[1e6,'million'],[1e3,'thousand']])if(n>=v)return words(Math.floor(n/v))+' '+w+(n%v?(n%v<100?' and ':' ')+words(n%v):'');return '';}
+[['to_binary','writes it in binary (5 → 101)',x=>(Math.trunc(x)>>>0).toString(2)],['to_hex','writes it in hexadecimal (255 → ff)',x=>(Math.trunc(x)>>>0).toString(16)],['to_octal','writes it in octal',x=>(Math.trunc(x)>>>0).toString(8)],
+ ['to_roman','writes it in Roman numerals (2024 → MMXXIV)',x=>{let n=Math.trunc(x),s='';if(n<=0||n>=4000)return String(n);for(const [v,r] of ROM)while(n>=v){s+=r;n-=v;}return s;}],
+ ['to_words','writes it in words (42 → forty-two)',x=>words(x)],['ordinal','writes it as 1st, 2nd, 3rd…',x=>{const n=Math.trunc(x),t=n%100;return n+(t>=11&&t<=13?'th':({1:'st',2:'nd',3:'rd'}[n%10]||'th'));}],
+ ['format_time','writes seconds as m:ss (95 → 1:35)',x=>{const s=Math.max(0,Math.floor(x)),h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=String(s%60).padStart(2,'0');return h?h+':'+String(m).padStart(2,'0')+':'+ss:m+':'+ss;}],
+ ['format_number','adds commas (1234567 → 1,234,567)',x=>x.toLocaleString('en-US',{maximumFractionDigits:6})],['short_number','shortens big numbers (12500 → 12.5K)',x=>{const a=Math.abs(x);for(const [v,s] of [[1e12,'T'],[1e9,'B'],[1e6,'M'],[1e3,'K']])if(a>=v)return (Math.round(x/v*10)/10)+s;return String(Math.round(x*10)/10);}],
+ ['format_money','writes it as money ($1,234.50)',x=>(x<0?'-':'')+'$'+Math.abs(x).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})],['percent_text','writes 0.42 as 42%',x=>Math.round(x*1000)/10+'%']
+].forEach(([n,h,f])=>ADD('Math',n,h,'#'+n+' = x',(c,a)=>{const k=key(a);set(k,f(num(k)));}));
+[['from_binary','reads binary text back into a number',s=>parseInt(s,2)||0],['from_hex','reads hexadecimal text back into a number',s=>parseInt(s,16)||0],['from_octal','reads octal text back into a number',s=>parseInt(s,8)||0],
+ ['from_roman','reads Roman numerals back into a number',s=>{s=s.toUpperCase();let n=0,i=0;for(const [v,r] of ROM)while(s.startsWith(r,i)){n+=v;i+=r.length;}return n;}],['to_number','turns text like "42" into the number 42',s=>parseFloat(s)||0]
+].forEach(([n,h,f])=>ADD('Math',n,h,'#'+n+' = x',(c,a)=>{const k=key(a);set(k,f(txt(k).trim()));}));
+
+/* ---------- Text ---------- */
+const VOW=/[aeiou]/gi;
+[['upper','MAKES IT ALL CAPITALS',s=>s.toUpperCase()],['lower','makes it all small letters',s=>s.toLowerCase()],['capitalize','Makes the first letter big',s=>s.charAt(0).toUpperCase()+s.slice(1)],
+ ['title_case','Makes Every Word Start Big',s=>s.toLowerCase().replace(/\b[a-z]/g,m=>m.toUpperCase())],['reverse_text','writes it backwards',s=>[...s].reverse().join('')],['trim','removes spaces at both ends',s=>s.trim()],
+ ['trim_start','removes spaces at the start',s=>s.trimStart()],['trim_end','removes spaces at the end',s=>s.trimEnd()],['first_letter','keeps only the first letter',s=>[...s][0]||''],['last_letter','keeps only the last letter',s=>[...s].slice(-1)[0]||''],
+ ['first_word','keeps only the first word',s=>s.trim().split(/\s+/)[0]||''],['last_word','keeps only the last word',s=>s.trim().split(/\s+/).slice(-1)[0]||''],['reverse_words','puts the words in reverse order',s=>s.trim().split(/\s+/).reverse().join(' ')],
+ ['shuffle_letters','mixes up its letters',s=>{const a=[...s];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a.join('');}],
+ ['shuffle_words','mixes up its words',s=>{const a=s.trim().split(/\s+/);for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a.join(' ');}],
+ ['sort_letters','puts its letters in A–Z order',s=>[...s].sort((a,b)=>a.localeCompare(b)).join('')],['sort_words','puts its words in A–Z order',s=>s.trim().split(/\s+/).sort((a,b)=>a.localeCompare(b)).join(' ')],
+ ['remove_vowels','takes out a, e, i, o, u',s=>s.replace(VOW,'')],['remove_spaces','takes out every space',s=>s.replace(/\s+/g,'')],['remove_numbers','takes out every digit',s=>s.replace(/\d/g,'')],['remove_punctuation','takes out . , ! ? and other marks',s=>s.replace(/[^\p{L}\p{N}\s]/gu,'')],
+ ['only_numbers','keeps only the digits',s=>s.replace(/[^\d]/g,'')],['only_letters','keeps only the letters',s=>s.replace(/[^\p{L}]/gu,'')],['squash_spaces','turns many spaces into one',s=>s.replace(/\s+/g,' ').trim()],
+ ['snake_case','turns "Hello World" into hello_world',s=>s.trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')],['kebab_case','turns "Hello World" into hello-world',s=>s.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')],
+ ['camel_case','turns "hello world" into helloWorld',s=>s.trim().toLowerCase().replace(/[^a-z0-9]+(.)/g,(_,c)=>c.toUpperCase())],['pascal_case','turns "hello world" into HelloWorld',s=>s.trim().toLowerCase().replace(/(^|[^a-z0-9]+)(.)/g,(_,a,c)=>c.toUpperCase())],
+ ['swap_case','turns big letters small and small letters big',s=>[...s].map(c=>c===c.toUpperCase()?c.toLowerCase():c.toUpperCase()).join('')],['alternate_case','wRiTeS iT lIkE tHiS',s=>{let i=0;return [...s].map(c=>/\p{L}/u.test(c)?(i++%2?c.toUpperCase():c.toLowerCase()):c).join('');}],
+ ['spaced_out','p u t s   s p a c e s between letters',s=>[...s].join(' ')],['rot13','scrambles letters by 13 (do it again to unscramble)',s=>s.replace(/[a-z]/gi,c=>{const b=c<='Z'?65:97;return String.fromCharCode((c.charCodeAt(0)-b+13)%26+b);})],
+ ['pig_latin','turns "hello" into "ellohay"',s=>s.replace(/\b([b-df-hj-np-tv-z]*)([a-z]+)\b/gi,(m,c,r)=>{const o=c?r+c.toLowerCase()+'ay':r+'way';return /^[A-Z]/.test(m)?o.charAt(0).toUpperCase()+o.slice(1).toLowerCase():o;})],['leet_speak','turns "leet" into "1337"',s=>s.replace(/[aeiolst]/gi,c=>({a:'4',e:'3',i:'1',o:'0',l:'1',s:'5',t:'7'})[c.toLowerCase()])],
+ ['to_morse','writes it in Morse code',s=>s.toUpperCase().split('').map(c=>MORSE[c]||(c===' '?'/':'')).filter(Boolean).join(' ')],['from_morse','reads Morse code back into letters',s=>s.trim().split(/\s+/).map(w=>w==='/'?' ':(Object.keys(MORSE).find(k=>MORSE[k]===w)||'')).join('')],
+ ['to_binary_text','writes each letter as 8 binary digits',s=>[...s].map(c=>c.charCodeAt(0).toString(2).padStart(8,'0')).join(' ')],['from_binary_text','reads 8-digit binary back into letters',s=>s.trim().split(/\s+/).map(b=>String.fromCharCode(parseInt(b,2)||32)).join('')],
+ ['slugify','makes it safe for a web address (My Game! → my-game)',s=>s.normalize('NFKD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')],
+ ['initials','turns "Big Red Ball" into BRB',s=>s.trim().split(/\s+/).map(w=>w[0]||'').join('').toUpperCase()],['quote','puts "quote marks" around it',s=>'"'+s+'"'],['bracket','puts [brackets] around it',s=>'['+s+']'],
+ ['double_letters','ddoouubblleess every letter',s=>[...s].map(c=>c+c).join('')],['stretch_vowels','makes vowels loooong',s=>s.replace(VOW,m=>m+m+m)],['mirror_text','adds a backwards copy (abc → abccba)',s=>s+[...s].reverse().join('')],
+ ['censor','hides rude words with ****',s=>s.replace(/\b(stupid|dumb|idiot|hate|shut up|loser|noob)\b/gi,m=>'*'.repeat(m.length))],['emoji_free','takes out emojis',s=>s.replace(/\p{Extended_Pictographic}/gu,'')],
+ ['upside_down','writes it upside down (ʇxǝʇ)',s=>[...s.toLowerCase()].reverse().map(c=>UPD[c]||c).join('')],['small_caps','writes it in sᴍᴀʟʟ ᴄᴀᴘs',s=>[...s.toLowerCase()].map(c=>SMC[c]||c).join('')],
+ ['bubble_text','writes it in ⓑⓤⓑⓑⓛⓔ letters',s=>[...s].map(c=>{const o=c.toLowerCase().charCodeAt(0);return o>=97&&o<=122?String.fromCodePoint(0x24D0+o-97):c;}).join('')],
+ ['wide_text','writes it in ｗｉｄｅ letters',s=>[...s].map(c=>{const o=c.charCodeAt(0);return o>32&&o<127?String.fromCharCode(o+0xFEE0):(c===' '?'　':c);}).join('')],
+ ['strike_text','writes it with a line through (s̶t̶r̶i̶k̶e̶)',s=>[...s].map(c=>c+'̶').join('')],['underline_text','writes it underlined (u̲n̲d̲e̲r̲)',s=>[...s].map(c=>c+'̲').join('')]
+].forEach(([n,h,f])=>UT(n,h,f));
+const MORSE={A:'.-',B:'-...',C:'-.-.',D:'-..',E:'.',F:'..-.',G:'--.',H:'....',I:'..',J:'.---',K:'-.-',L:'.-..',M:'--',N:'-.',O:'---',P:'.--.',Q:'--.-',R:'.-.',S:'...',T:'-',U:'..-',V:'...-',W:'.--',X:'-..-',Y:'-.--',Z:'--..',0:'-----',1:'.----',2:'..---',3:'...--',4:'....-',5:'.....',6:'-....',7:'--...',8:'---..',9:'----.','.':'.-.-.-',',':'--..--','?':'..--..','!':'-.-.--'};
+const UPD={a:'ɐ',b:'q',c:'ɔ',d:'p',e:'ǝ',f:'ɟ',g:'ƃ',h:'ɥ',i:'ᴉ',j:'ɾ',k:'ʞ',l:'l',m:'ɯ',n:'u',o:'o',p:'d',q:'b',r:'ɹ',s:'s',t:'ʇ',u:'n',v:'ʌ',w:'ʍ',x:'x',y:'ʎ',z:'z','.':'˙',',':"'",'?':'¿','!':'¡','(':')',')':'('};
+const SMC={a:'ᴀ',b:'ʙ',c:'ᴄ',d:'ᴅ',e:'ᴇ',f:'ꜰ',g:'ɢ',h:'ʜ',i:'ɪ',j:'ᴊ',k:'ᴋ',l:'ʟ',m:'ᴍ',n:'ɴ',o:'ᴏ',p:'ᴘ',q:'ǫ',r:'ʀ',s:'s',t:'ᴛ',u:'ᴜ',v:'ᴠ',w:'ᴡ',x:'x',y:'ʏ',z:'ᴢ'};
+/* text with a value:  #name = msg : value */
+[['replace_text','swaps words: #replace_text = msg : cat > dog',(s,r)=>{const i=r.indexOf('>');return i<0?s:s.split(r.slice(0,i).trim()).join(r.slice(i+1).trim());},'#replace_text = msg : cat > dog'],
+ ['remove_text','takes out every copy of some text',(s,r)=>s.split(r).join(''),'#remove_text = msg : um'],['repeat_text','repeats it a number of times',(s,r)=>s.repeat(Math.min(200,Math.max(0,Math.floor(N(r))))),'#repeat_text = msg : 3'],
+ ['pad_start','adds zeros (or a letter) at the start until it is long enough (#pad_start = code : 4)',(s,r)=>{const [n,ch]=r.split(',');return s.padStart(Math.min(200,Math.floor(N(n))),(ch||'0').trim()||'0');},'#pad_start = code : 4'],
+ ['pad_end','adds spaces (or a letter) at the end until it is long enough',(s,r)=>{const [n,ch]=r.split(',');return s.padEnd(Math.min(200,Math.floor(N(n))),(ch||' ').trim()||' ');},'#pad_end = name : 10, .'],
+ ['truncate','cuts it to a length and adds …',(s,r)=>{const n=Math.max(1,Math.floor(N(r)));return [...s].length>n?[...s].slice(0,n).join('')+'…':s;},'#truncate = msg : 12'],
+ ['add_text_start','puts some text in front',(s,r)=>T(r)+s,'#add_text_start = msg : Hi '],['add_text_end','puts some text at the end',(s,r)=>s+T(r),'#add_text_end = msg : !'],
+ ['caesar','shifts every letter along the alphabet',(s,r)=>{const k=((Math.floor(N(r))%26)+26)%26;return s.replace(/[a-z]/gi,c=>{const b=c<='Z'?65:97;return String.fromCharCode((c.charCodeAt(0)-b+k)%26+b);});},'#caesar = msg : 3'],
+ ['keep_first','keeps only the first N letters',(s,r)=>[...s].slice(0,Math.max(0,Math.floor(N(r)))).join(''),'#keep_first = msg : 5'],['keep_last','keeps only the last N letters',(s,r)=>{const n=Math.max(0,Math.floor(N(r)));return n?[...s].slice(-n).join(''):'';},'#keep_last = msg : 5'],
+ ['drop_first','removes the first N letters',(s,r)=>[...s].slice(Math.max(0,Math.floor(N(r)))).join(''),'#drop_first = msg : 2'],['drop_last','removes the last N letters',(s,r)=>{const n=Math.max(0,Math.floor(N(r)));return n?[...s].slice(0,-n).join(''):s;},'#drop_last = msg : 2'],
+ ['insert_text','puts text in at a position (#insert_text = msg : 3, abc)',(s,r)=>{const i=r.indexOf(',');const p=Math.floor(N(r.slice(0,i<0?r.length:i)));const t=i<0?'':T(r.slice(i+1));const a=[...s];a.splice(p,0,t);return a.join('');},'#insert_text = msg : 3, hey'],
+ ['wrap_text','puts a line break every N letters',(s,r)=>{const n=Math.max(1,Math.floor(N(r)));const w=s.split(' ');const L=[];let cur='';w.forEach(x=>{if((cur+' '+x).trim().length>n&&cur){L.push(cur);cur=x;}else cur=(cur+' '+x).trim();});if(cur)L.push(cur);return L.join('\n');},'#wrap_text = msg : 20'],
+ ['surround','puts text on both sides (#surround = msg : *)',(s,r)=>T(r)+s+[...T(r)].reverse().join(''),'#surround = msg : ~*']
+].forEach(([n,h,f,ex])=>B('Text',n,h,ex,(cur,A,k)=>f(txt(k),A.join(','))));
+/* text questions that save an answer:  #name = answer : text, … */
+[['text_length','how many letters it has',A=>[...T(A[0])].length,'#text_length = n : msg'],['word_count','how many words it has',A=>{const s=T(A[0]).trim();return s?s.split(/\s+/).length:0;},'#word_count = n : msg'],
+ ['vowel_count','how many vowels (a e i o u) it has',A=>(T(A[0]).match(VOW)||[]).length,'#vowel_count = n : msg'],['line_count','how many lines it has',A=>T(A[0]).split('\n').length,'#line_count = n : msg'],
+ ['contains','true if the text has some other text in it',A=>T(A[0]).toLowerCase().includes(T(A[1]).toLowerCase()),'#contains = yes : msg, hello'],
+ ['starts_with','true if the text begins with some text',A=>T(A[0]).toLowerCase().startsWith(T(A[1]).toLowerCase()),'#starts_with = yes : msg, hi'],['ends_with','true if the text ends with some text',A=>T(A[0]).toLowerCase().endsWith(T(A[1]).toLowerCase()),'#ends_with = yes : msg, !'],
+ ['position_of','where some text first appears (1 = first letter, 0 = not there)',A=>T(A[0]).toLowerCase().indexOf(T(A[1]).toLowerCase())+1,'#position_of = p : msg, cat'],
+ ['count_text','how many times some text appears',A=>{const s=T(A[0]).toLowerCase(),t=T(A[1]).toLowerCase();return t?s.split(t).length-1:0;},'#count_text = n : msg, a'],
+ ['letter_at','the letter at a position (1 = first)',A=>[...T(A[0])][Math.floor(N(A[1]))-1]||'','#letter_at = l : msg, 1'],['word_at','the word at a position (1 = first)',A=>T(A[0]).trim().split(/\s+/)[Math.floor(N(A[1]))-1]||'','#word_at = w : msg, 2'],
+ ['part_of_text','letters from one position to another',A=>[...T(A[0])].slice(Math.max(0,Math.floor(N(A[1]))-1),Math.floor(N(A[2]))).join(''),'#part_of_text = p : msg, 1, 5'],
+ ['join_text','sticks texts together',A=>A.map(T).join(''),'#join_text = full : first, " ", last'],['join_with','sticks texts together with something in between (first value)',A=>A.slice(1).map(T).join(T(A[0])),'#join_with = full : -, a, b, c'],
+ ['is_number','true if the text is a number',A=>{const s=T(A[0]).trim();return s!==''&&isFinite(+s);},'#is_number = ok : answer'],['is_empty','true if there is no text',A=>T(A[0]).trim()==='','#is_empty = blank : name'],
+ ['is_palindrome','true if it reads the same backwards (racecar)',A=>{const s=T(A[0]).toLowerCase().replace(/[^a-z0-9]/g,'');return s.length>0&&s===[...s].reverse().join('');},'#is_palindrome = yes : word'],
+ ['is_anagram','true if two words use the same letters (listen, silent)',A=>{const f=x=>T(x).toLowerCase().replace(/[^a-z]/g,'').split('').sort().join('');return f(A[0])===f(A[1])&&f(A[0])!=='';},'#is_anagram = yes : listen, silent'],
+ ['same_text','true if two texts match, ignoring big/small letters',A=>T(A[0]).trim().toLowerCase()===T(A[1]).trim().toLowerCase(),'#same_text = yes : guess, answer'],
+ ['letter_code','the number code of a letter (A → 65)',A=>T(A[0]).codePointAt(0)||0,'#letter_code = n : A'],['from_letter_code','the letter for a number code (65 → A)',A=>String.fromCodePoint(Math.max(0,Math.min(0x10FFFF,Math.floor(N(A[0]))))),'#from_letter_code = l : 65'],
+ ['alphabet_position','where a letter is in the alphabet (c → 3)',A=>{const c=T(A[0]).toLowerCase().charCodeAt(0);return c>=97&&c<=122?c-96:0;},'#alphabet_position = n : c'],
+ ['letter_number','the letter at a place in the alphabet (3 → c)',A=>{const n=Math.floor(N(A[0]));return n>=1&&n<=26?String.fromCharCode(96+n):'';},'#letter_number = l : 3'],
+ ['random_word','a random everyday word',()=>WORDS[Math.floor(Math.random()*WORDS.length)],'#random_word = w'],['random_name','a random made-up name',()=>{const a=['Ka','Mo','Zi','Lu','Ra','Te','No','Bi','Fa','Su','Gro','Pli','Vex','Dra','Qui'],b=['ra','lo','ven','mi','zor','tan','pip','dle','ko','nix','bel','tu'];return a[Math.floor(Math.random()*a.length)]+b[Math.floor(Math.random()*b.length)]+(Math.random()<0.4?b[Math.floor(Math.random()*b.length)]:'');},'#random_name = n'],
+ ['similarity','how alike two texts are, from 0 to 100',A=>{const a=T(A[0]).toLowerCase(),b=T(A[1]).toLowerCase();const m=Math.max(a.length,b.length);if(!m)return 100;const d=lev(a,b);return Math.round((1-d/m)*100);},'#similarity = s : guess, answer'],
+ ['text_to_list','splits text into a list at commas (or another mark)',A=>{const s=T(A[0]);const sep=A[1]!=null?T(A[1]):',';return s.split(sep||',').map(x=>x.trim()).filter(x=>x!=='');},'#text_to_list = items : csv'],
+ ['letters_list','makes a list of its letters',A=>[...T(A[0])],'#letters_list = letters : word'],['words_list','makes a list of its words',A=>T(A[0]).trim().split(/\s+/).filter(Boolean),'#words_list = words : msg']
+].forEach(([n,h,f,ex])=>I('Text',n,h,ex,f));
+const WORDS='apple river cloud stone rocket pickle dragon pencil lantern meadow castle thunder pebble rainbow island button jungle comet garden whistle marble canyon breeze puzzle tiger blanket pepper anchor volcano sparrow orbit cactus harbor violin maple feather crystal shadow tunnel wizard turtle mango glacier ember ladder kettle pirate saddle compass nugget banjo falcon velvet donut pyramid crater penguin tornado lagoon walrus biscuit trumpet magnet hammock'.split(' ');
+
+/* ---------- Lists ---------- */
+const L=(n,h,ex,f)=>ADD('Lists',n,h,ex,(c,a)=>{const [k,r]=kva(a);const l=lst(k).slice();const out=f(l,splitArgs(r),k);set(k,out===undefined?l:out);});
+const LQ=(n,h,ex,f)=>ADD('Lists',n,h,ex,(c,a)=>{const [k,r]=kva(a);const A=splitArgs(r);set(k,fix(f(lst(key(A[0])),A.slice(1))));});
+const nums=l=>l.map(x=>parseFloat(x)).filter(x=>isFinite(x));
+const shuffle=l=>{for(let i=l.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[l[i],l[j]]=[l[j],l[i]];}return l;};
+ADD('Lists','list_new','makes a new list, empty or with things in it','#list_new = bag : sword, shield',(c,a)=>{const [k,r]=kva(a);set(k,r?splitArgs(r).map(ev):[]);});
+L('list_add','adds things to the end of a list','#list_add = bag : apple',(l,A)=>{A.forEach(x=>l.push(ev(x)));});
+L('list_add_front','adds things to the start of a list','#list_add_front = bag : apple',(l,A)=>{l.unshift(...A.map(ev));});
+L('list_insert','puts a thing in at a position (1 = first)','#list_insert = bag : 2, apple',(l,A)=>{l.splice(Math.max(0,Math.floor(N(A[0]))-1),0,ev(A[1]));});
+L('list_remove','removes the first copy of a thing','#list_remove = bag : apple',(l,A)=>{const v=String(ev(A[0]));const i=l.findIndex(x=>String(x)===v);if(i>=0)l.splice(i,1);});
+L('list_remove_all','removes every copy of a thing','#list_remove_all = bag : apple',(l,A)=>{const v=String(ev(A[0]));return l.filter(x=>String(x)!==v);});
+L('list_remove_at','removes the thing at a position (1 = first)','#list_remove_at = bag : 1',(l,A)=>{l.splice(Math.floor(N(A[0]))-1,1);});
+L('list_clear','empties a list','#list_clear = bag',()=>[]);
+L('list_pop','removes the last thing (saves it in the variable "popped")','#list_pop = bag',l=>{G.vars.popped=l.pop();});
+L('list_shift','removes the first thing (saves it in the variable "shifted")','#list_shift = bag',l=>{G.vars.shifted=l.shift();});
+L('list_set','changes the thing at a position','#list_set = bag : 2, axe',(l,A)=>{const i=Math.floor(N(A[0]))-1;if(i>=0&&i<1e5)l[i]=ev(A[1]);});
+L('list_sort','sorts a list from small to big / A to Z','#list_sort = scores',l=>l.sort((a,b)=>isFinite(a)&&isFinite(b)?a-b:String(a).localeCompare(String(b))));
+L('list_sort_desc','sorts a list from big to small / Z to A','#list_sort_desc = scores',l=>l.sort((a,b)=>isFinite(a)&&isFinite(b)?b-a:String(b).localeCompare(String(a))));
+L('list_sort_length','sorts a list from shortest to longest','#list_sort_length = names',l=>l.sort((a,b)=>String(a).length-String(b).length));
+L('list_reverse','turns a list back to front','#list_reverse = queue',l=>l.reverse());
+L('list_shuffle','mixes up a list','#list_shuffle = deck',l=>shuffle(l));
+L('list_unique','removes repeated things','#list_unique = tags',l=>[...new Set(l.map(String))].map(ev));
+L('list_rotate','moves things along, the end wraps to the start (#list_rotate = turn : 1)','#list_rotate = turn : 1',(l,A)=>{if(!l.length)return l;const n=((Math.floor(N(A[0]||1))%l.length)+l.length)%l.length;return l.slice(-n).concat(l.slice(0,l.length-n));});
+L('list_swap','swaps two positions','#list_swap = bag : 1, 3',(l,A)=>{const i=Math.floor(N(A[0]))-1,j=Math.floor(N(A[1]))-1;if(l[i]!==undefined&&l[j]!==undefined)[l[i],l[j]]=[l[j],l[i]];});
+L('list_fill','fills a list with the same thing many times','#list_fill = row : 0, 10',(l,A)=>Array(Math.min(10000,Math.max(0,Math.floor(N(A[1]))))).fill(ev(A[0])));
+L('list_range','fills a list with counting numbers (#list_range = n : 1, 10)','#list_range = n : 1, 10',(l,A)=>{const a=N(A[0]),b=N(A[1]),s=Math.abs(N(A[2]||1))||1;const o=[];if(a<=b)for(let x=a;x<=b&&o.length<10000;x+=s)o.push(x);else for(let x=a;x>=b&&o.length<10000;x-=s)o.push(x);return o;});
+L('list_slice','keeps positions from one place to another','#list_slice = top : 1, 3',(l,A)=>l.slice(Math.max(0,Math.floor(N(A[0]))-1),Math.floor(N(A[1]))));
+L('list_take','keeps only the first N things','#list_take = top : 3',(l,A)=>l.slice(0,Math.max(0,Math.floor(N(A[0])))));
+L('list_drop','removes the first N things','#list_drop = rest : 1',(l,A)=>l.slice(Math.max(0,Math.floor(N(A[0])))));
+L('list_concat','sticks other lists on the end','#list_concat = all : more, extra',(l,A)=>l.concat(...A.map(x=>lst(key(x)))));
+L('list_add_each','adds a number to every number in the list','#list_add_each = scores : 5',(l,A)=>l.map(x=>isFinite(parseFloat(x))?fix(parseFloat(x)+N(A[0])):x));
+L('list_times_each','multiplies every number in the list','#list_times_each = prices : 2',(l,A)=>l.map(x=>isFinite(parseFloat(x))?fix(parseFloat(x)*N(A[0])):x));
+L('list_keep_above','keeps only numbers above a value','#list_keep_above = scores : 50',(l,A)=>l.filter(x=>parseFloat(x)>N(A[0])));
+L('list_keep_below','keeps only numbers below a value','#list_keep_below = scores : 50',(l,A)=>l.filter(x=>parseFloat(x)<N(A[0])));
+L('list_keep_text','keeps only things that contain some text','#list_keep_text = names : an',(l,A)=>l.filter(x=>String(x).toLowerCase().includes(T(A[0]).toLowerCase())));
+L('list_remove_text','removes things that contain some text','#list_remove_text = names : x',(l,A)=>l.filter(x=>!String(x).toLowerCase().includes(T(A[0]).toLowerCase())));
+L('list_round','rounds every number in the list','#list_round = scores',l=>l.map(x=>isFinite(parseFloat(x))?Math.round(parseFloat(x)):x));
+L('list_upper','makes every thing in the list CAPITALS','#list_upper = names',l=>l.map(x=>String(x).toUpperCase()));
+L('list_numbered','writes "1. thing" in front of each thing','#list_numbered = steps',l=>l.map((x,i)=>(i+1)+'. '+x));
+L('list_pick_out','removes a random thing (saves it in "picked")','#list_pick_out = deck',l=>{if(l.length){const i=Math.floor(Math.random()*l.length);G.vars.picked=l.splice(i,1)[0];}});
+L('list_cumulative','turns each number into the running total','#list_cumulative = daily',l=>{let s=0;return l.map(x=>{s+=parseFloat(x)||0;return fix(s);});});
+L('list_differences','turns the list into the gaps between neighbours','#list_differences = heights',l=>{const n=nums(l);return n.slice(1).map((x,i)=>fix(x-n[i]));});
+L('list_normalize','scales numbers so they add up to 1','#list_normalize = weights',l=>{const n=nums(l);const s=n.reduce((a,b)=>a+b,0);return s?n.map(x=>fix(x/s)):n;});
+L('list_chunk','groups the list into pieces of N (as text)','#list_chunk = teams : 2',(l,A)=>{const n=Math.max(1,Math.floor(N(A[0])));const o=[];for(let i=0;i<l.length;i+=n)o.push(l.slice(i,i+n).join(' & '));return o;});
+LQ('list_length','how many things are in a list','#list_length = n : bag',l=>l.length);
+LQ('list_get','the thing at a position (1 = first)','#list_get = item : bag, 1',(l,A)=>l[Math.floor(N(A[0]))-1]??'');
+LQ('list_first','the first thing in a list','#list_first = item : bag',l=>l[0]??'');LQ('list_last','the last thing in a list','#list_last = item : bag',l=>l[l.length-1]??'');
+LQ('list_random','a random thing from a list','#list_random = item : bag',l=>l.length?l[Math.floor(Math.random()*l.length)]:'');
+LQ('list_contains','true if a thing is in the list','#list_contains = has : bag, key',(l,A)=>l.some(x=>String(x).toLowerCase()===String(ev(A[0])).toLowerCase()));
+LQ('list_index_of','the position of a thing (0 if missing)','#list_index_of = p : bag, key',(l,A)=>l.findIndex(x=>String(x).toLowerCase()===String(ev(A[0])).toLowerCase())+1);
+LQ('list_count','how many times a thing is in the list','#list_count = n : bag, apple',(l,A)=>l.filter(x=>String(x).toLowerCase()===String(ev(A[0])).toLowerCase()).length);
+LQ('list_join','joins a list into text','#list_join = text : bag, " and "',(l,A)=>l.join(A[0]!=null?String(ev(A[0])):', '));
+LQ('list_sum','adds up the numbers in a list','#list_sum = total : scores',l=>nums(l).reduce((a,b)=>a+b,0));
+LQ('list_product','multiplies the numbers in a list','#list_product = p : n',l=>nums(l).reduce((a,b)=>a*b,1));
+LQ('list_average','the average of the numbers','#list_average = avg : scores',l=>{const n=nums(l);return n.length?n.reduce((a,b)=>a+b,0)/n.length:0;});
+LQ('list_median','the middle number','#list_median = mid : scores',l=>{const n=nums(l).sort((a,b)=>a-b);if(!n.length)return 0;const m=Math.floor(n.length/2);return n.length%2?n[m]:(n[m-1]+n[m])/2;});
+LQ('list_mode','the thing that appears most often','#list_mode = common : votes',l=>{const c={};let best='',bn=0;l.forEach(x=>{const k=String(x);c[k]=(c[k]||0)+1;if(c[k]>bn){bn=c[k];best=x;}});return best;});
+LQ('list_min','the smallest number','#list_min = low : scores',l=>{const n=nums(l);return n.length?Math.min(...n):0;});LQ('list_max','the biggest number','#list_max = high : scores',l=>{const n=nums(l);return n.length?Math.max(...n):0;});
+LQ('list_range_size','biggest minus smallest','#list_range_size = spread : scores',l=>{const n=nums(l);return n.length?Math.max(...n)-Math.min(...n):0;});
+LQ('list_variance','how spread out the numbers are (variance)','#list_variance = v : scores',l=>{const n=nums(l);if(!n.length)return 0;const m=n.reduce((a,b)=>a+b,0)/n.length;return n.reduce((s,x)=>s+(x-m)**2,0)/n.length;});
+LQ('list_stdev','how spread out the numbers are (standard deviation)','#list_stdev = sd : scores',l=>{const n=nums(l);if(!n.length)return 0;const m=n.reduce((a,b)=>a+b,0)/n.length;return Math.sqrt(n.reduce((s,x)=>s+(x-m)**2,0)/n.length);});
+LQ('list_is_empty','true if the list has nothing in it','#list_is_empty = empty : bag',l=>l.length===0);
+LQ('list_longest','the longest text in the list','#list_longest = w : words',l=>l.reduce((a,b)=>String(b).length>String(a).length?b:a,''));
+LQ('list_shortest','the shortest text in the list','#list_shortest = w : words',l=>l.length?l.reduce((a,b)=>String(b).length<String(a).length?b:a):'');
+LQ('list_same','true if two lists hold the same things in the same order','#list_same = match : guess, code',(l,A)=>{const m=lst(key(A[0]));return l.length===m.length&&l.every((x,i)=>String(x)===String(m[i]));});
+ADD('Lists','list_print','shows a list in the output','#list_print = bag',(c,a)=>{const k=key(a);out(k+' = ['+lst(k).join(', ')+']');});
+/* ---------- Tables (name → value) ---------- */
+const tab=k=>{const v=get(k);return v&&typeof v==='object'&&!Array.isArray(v)?v:{};};
+ADD('Lists','table_set','stores a value under a name in a table','#table_set = prices : sword, 50',(c,a)=>{const [k,r]=kva(a);const A=splitArgs(r);const t=Object.assign({},tab(k));t[key(A[0])]=ev(A.slice(1).join(','));set(k,t);});
+ADD('Lists','table_get','reads a value from a table (#table_get = cost : prices, sword)','#table_get = cost : prices, sword',(c,a)=>{const [k,r]=kva(a);const A=splitArgs(r);set(k,tab(key(A[0]))[key(A[1])]??'');});
+ADD('Lists','table_remove','removes a name from a table','#table_remove = prices : sword',(c,a)=>{const [k,r]=kva(a);const t=Object.assign({},tab(k));delete t[key(r)];set(k,t);});
+ADD('Lists','table_has','true if a table has that name','#table_has = found : prices, sword',(c,a)=>{const [k,r]=kva(a);const A=splitArgs(r);set(k,key(A[1]) in tab(key(A[0])));});
+ADD('Lists','table_keys','makes a list of the names in a table','#table_keys = names : prices',(c,a)=>{const [k,r]=kva(a);set(k,Object.keys(tab(key(r))));});
+ADD('Lists','table_values','makes a list of the values in a table','#table_values = costs : prices',(c,a)=>{const [k,r]=kva(a);set(k,Object.values(tab(key(r))));});
+ADD('Lists','table_count','how many names are in a table','#table_count = n : prices',(c,a)=>{const [k,r]=kva(a);set(k,Object.keys(tab(key(r))).length);});
+ADD('Lists','table_clear','empties a table','#table_clear = prices',(c,a)=>set(key(a),{}));
+ADD('Lists','table_add','adds a number to a value in a table (good for counting)','#table_add = votes : red, 1',(c,a)=>{const [k,r]=kva(a);const A=splitArgs(r);const t=Object.assign({},tab(k));const n=key(A[0]);t[n]=fix((parseFloat(t[n])||0)+N(A[1]||1));set(k,t);});
+ADD('Lists','table_print','shows a table in the output','#table_print = prices',(c,a)=>{const k=key(a);out(k+' = {'+Object.entries(tab(k)).map(([x,y])=>x+': '+y).join(', ')+'}');});
+})();
+
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
 function init(){if(!load())defaultPlace();lastSnap=snapState();bind();let dv=null;try{dv=localStorage.getItem('buildx-device');}catch(e){}setDevice(dv||(matchMedia('(pointer:coarse)').matches?'mob':'pc'));if(!dv)$('devpick').style.display='flex';applySettings();refreshToolbox();refreshAll();out('👋 Welcome to BuildX! '+Object.keys(CMDS).length+' commands, '+CATALOG.length+' things to insert. Press ▶ Play to test.');startIcons();requestAnimationFrame(frame);}
 
