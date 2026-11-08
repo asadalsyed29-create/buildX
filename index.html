@@ -5435,6 +5435,20 @@ const _rp=refreshProps;refreshProps=function(){_rp.apply(this,arguments);const p
  pp.querySelectorAll('[data-mx]').forEach(b=>b.onclick=()=>{const k=b.dataset.mx;if(k==='edit')meOpen(o);else if(k==='make')texMaker(o);else if(k==='tpl')downloadTemplate(o);else if(k==='imp')importTexture(o);else{delete o.props.Texture;delete o.props.TexShapes;commit();refreshProps();}});};
 })();
 
+/* ================= 25. easy event lines: #touch = kill  ·  #click = explode ================= */
+(function(){
+/* #touch = X   means: when someone touches this, do X to them      (#if = toucher = touch = X = toucher)
+   #click = X   means: when someone clicks this, do X               (#on = click = X)                    */
+function easy(src){return String(src==null?'':src).split('\n').map(l=>{const m=l.match(/^(\s*)#\s*(touch|touched|click|clicked|tap|tapped)\s*=\s*(.+)$/i);if(!m)return l;let rest=m[3].trim();const ev=/^(touch|touched)$/i.test(m[2])?'touch':'click';
+ const parts=rest.split(/\s*=\s*/);const n=parts[0].toLowerCase().replace(/\s+/g,'_');const C=CMDS[n];
+ if(ev==='touch'){if(C&&C.tg){const who='toucher';if(parts.length===1)rest=parts[0]+' = '+who;else if(!/^(toucher|touched|everyone|all|player|self|bots)\b/i.test(parts[1]))rest=parts[0]+' = '+who+' : '+parts.slice(1).join(' = ');}
+  return m[1]+'#if = toucher = touch = '+rest;}
+ return m[1]+'#on = click = '+rest;}).join('\n');}
+window.bxEasyCode=easy;
+const _c=compile;compile=function(src){return _c.call(this,easy(src));};
+const _k=checkCode;checkCode=function(src){return _k.call(this,easy(src));};
+})();
+
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
 function init(){if(!load())defaultPlace();lastSnap=snapState();bind();let dv=null;try{dv=localStorage.getItem('buildx-device');}catch(e){}setDevice(dv||(matchMedia('(pointer:coarse)').matches?'mob':'pc'));if(!dv)$('devpick').style.display='flex';applySettings();refreshToolbox();refreshAll();out('👋 Welcome to BuildX! '+Object.keys(CMDS).length+' commands, '+CATALOG.length+' things to insert. Press ▶ Play to test.');startIcons();requestAnimationFrame(frame);}
 
