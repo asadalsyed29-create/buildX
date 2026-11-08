@@ -3875,6 +3875,525 @@ ADD('Audio','drumroll','a snare drumroll','#drumroll = 2s',(c,a)=>{const d=TT(a)
 ADD('Audio','cymbal_crash_after_roll','a drumroll that ends with a crash','#cymbal_crash_after_roll',()=>{for(let t=0;t<1.6;t+=0.045)noise(0.05,0.2+t/8,2400,t);noise(1.6,0.45,9000,1.65);});
 })();
 
+/* ================= 15. base command batch 4: bot brains, weather, game rules, inventory, info ================= */
+(function(){
+const ADD=(cat,name,help,ex,fn,opt)=>{if(CMDS[name])return false;reg(cat,name,help,ex,fn,opt);return true;};
+const NB=(name,help,ex,fn)=>ADD('Bots',name,help,ex,null,{hum:fn,tg:true});
+const nm=(a,d)=>{const v=parseFloat(evalExpr(String(a==null?'':a).trim()));return isFinite(v)?v:d;};
+const TT=a=>{const s=String(a||'').trim();if(!s)return 0;const v=parseTime(s);return isFinite(v)?v:nm(s,0);};
+const key=s=>String(s||'').trim().toLowerCase();
+const kva=a=>{const i=String(a).indexOf(':');return i<0?[key(a),'']:[key(String(a).slice(0,i)),String(a).slice(i+1).trim()];};
+const setV=(k,v)=>{if(G&&k)G.vars[key(k)]=v;};
+const flat=(a,b)=>Math.hypot(a[0]-b[0],a[2]-b[2]);
+const alive=L=>L.filter(o=>o&&!o.dead);
+const X=h=>h.bx||(h.bx={});
+const one=(w,c)=>{const t=targets(w,c);return t&&t.h&&t.h[0]||null;};
+const partNamed=(w,c)=>{const t=targets(w,c);return t&&t.p&&t.p[0]||findPart(w);};
+const nearestHum=(h,f)=>{let b=null,bd=1e9;G.humans.forEach(o=>{if(o===h||o.dead||(f&&!f(o)))return;const d=len(sub(o.pos,h.pos));if(d<bd){bd=d;b=o;}});return [b,bd];};
+const dirTo=(h,p)=>{const d=sub(p,h.pos);d[1]=0;const L=len(d)||1;return [d[0]/L,d[2]/L,L];};
+const say=(h,s,t)=>{h.say=String(s);h.sayT=t||3;};
+const later=(t,f)=>{if(G)G.later.push([G.t+t,f]);};
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const spawnNow=pr=>{const P=spawnNew(pr);P.obb=obbOfSt(P.st);P.brad=len(P.st.Size)/2;return P;};
+const pick=L=>L[Math.floor(Math.random()*L.length)];
+
+/* ======================= bot brains ======================= */
+const MODES={
+ kite(h,A,dt){const p=G.player;if(p.dead)return null;const [x,z,L]=dirTo(h,p.pos);const r=A.r||18;if(L<r-3)return {d:[-x,-z],s:1};if(L>r+3)return {d:[x,z],s:0.8};return {d:[-z,x],s:0.5};},
+ ambush(h,A){const p=G.player;const L=len(sub(p.pos,h.pos));if(!A.awake&&L<(A.r||14)&&!p.dead){A.awake=1;say(h,'!',1);}if(!A.awake)return {stop:1};return p.dead?null:{to:p.pos,s:1.1};},
+ strafe(h,A,dt){const p=G.player;if(p.dead)return null;A.ph=(A.ph||0)+dt*(h.walk/Math.max(4,A.r||12));const r=A.r||12;return {to:add(p.pos,[Math.cos(A.ph)*r,0,Math.sin(A.ph)*r]),s:1,face:p.pos};},
+ herd(h,A){const B=alive(G.bots).filter(o=>o!==h);if(!B.length)return null;const c=B.reduce((s,o)=>add(s,o.pos),[0,0,0]).map(v=>v/B.length);const L=flat(c,h.pos);if(L<6)return {stop:1};return {to:c,s:0.6};},
+ swarm(h,A){const p=G.player;if(p.dead)return null;if(A.ang==null)A.ang=Math.random()*6.28;return {to:add(p.pos,[Math.cos(A.ang+G.t*0.6)*3,0,Math.sin(A.ang+G.t*0.6)*3]),s:1.15};},
+ sentry(h,A){const p=G.player;if(!p.dead&&len(sub(p.pos,h.pos))<(A.r||30))return {stop:1,face:p.pos};return {stop:1};},
+ roam(h,A,dt){A.t=(A.t||0)-dt;if(A.t<=0||!A.goal){const r=A.r||120;A.goal=add(h.ai.home,[rnd(-r,r),0,rnd(-r,r)]);A.t=6+Math.random()*6;}return {to:A.goal,s:0.7};},
+ go_home(h,A){if(flat(h.ai.home,h.pos)<2){A.mode=null;return {stop:1};}return {to:h.ai.home,s:1};},
+ hide(h,A){const p=G.player;let best=null,bd=1e9;G.parts.forEach(P=>{if(!P.alive||P.isBase||!P.collide||P.st.Size[1]<4||P.st.Size[0]>200)return;const d=flat(P.st.Position,h.pos);if(d<bd&&d<80){bd=d;best=P;}});if(!best)return MODES.run_far(h,A);
+  const [x,z]=dirTo({pos:p.pos},best.st.Position);const off=Math.max(best.st.Size[0],best.st.Size[2])/2+3;return {to:add(best.st.Position,[x*off,0,z*off]),s:1};},
+ stalk(h,A){const p=G.player;if(p.dead)return null;const [x,z,L]=dirTo(h,p.pos);const f=[Math.sin(p.yaw*D2R),Math.cos(p.yaw*D2R)];const looking=(-x*f[0]-z*f[1])>0.5;if(looking||L<4)return {stop:1,face:p.pos};return {to:p.pos,s:1};},
+ zigzag(h,A){const p=G.player;if(p.dead)return null;const [x,z]=dirTo(h,p.pos);const w=Math.sin(G.t*4)*0.9;return {d:[x-z*w,z+x*w],s:1};},
+ hop_chase(h,A){const p=G.player;if(p.dead)return null;return {to:p.pos,s:1,jump:h.ground};},
+ shy(h,A){const p=G.player;const L=flat(p.pos,h.pos);const sp=Math.hypot(p.vel[0],p.vel[2]);if(L<10&&sp>3)return {away:p.pos,s:1};if(L>14)return {to:p.pos,s:0.5};return {stop:1,face:p.pos};},
+ dance(h,A,dt){h.yaw+=dt*360;return {stop:1,jump:h.ground&&Math.random()<0.02};},
+ mirror(h,A){const p=G.player;const hm=h.ai.home;return {to:[2*hm[0]-p.pos[0],0,2*hm[2]-p.pos[2]],s:1.2};},
+ chase_bots(h,A){const [o]=nearestHum(h,o=>o.kind==='bot');return o?{to:o.pos,s:1}:null;},
+ protect(h,A){const o=A.who&&(findBot(A.who)||(PLAYER_NAMES.includes(A.who)?G.player:null))||G.player;if(!o||o.dead)return null;
+  const [en]=nearestHum(o,e=>e!==h&&e!==o&&e.kind==='bot'&&!(e.bx&&e.bx.mode==='protect'));if(en&&len(sub(en.pos,o.pos))<15)return {to:en.pos,s:1.2};return flat(o.pos,h.pos)>5?{to:o.pos,s:1}:{stop:1};},
+ orbit_part(h,A,dt){const P=A.part&&findPart(A.part);const c=P?P.st.Position:h.ai.home;const r=A.r||(P?Math.max(P.st.Size[0],P.st.Size[2])/2+5:10);A.ph=(A.ph||0)+dt*h.walk/r;return {to:add(c,[Math.cos(A.ph)*r,0,Math.sin(A.ph)*r]),s:1};},
+ path(h,A){const pts=(A.pts||[]).map(n=>findPart(n)).filter(Boolean);if(!pts.length)return null;A.i=A.i||0;const P=pts[A.i%pts.length];if(flat(P.st.Position,h.pos)<2.5){A.i++;if(A.once&&A.i>=pts.length){A.mode=null;return {stop:1};}}return {to:pts[A.i%pts.length].st.Position,s:0.9};},
+ run_far(h,A){const p=G.player;return {away:p.pos,s:1.1};},
+ jumpy(h,A,dt){A.t=(A.t||0)-dt;if(A.t<=0||!A.goal){A.goal=add(h.ai.home,[rnd(-30,30),0,rnd(-30,30)]);A.t=3;}return {to:A.goal,s:0.7,jump:h.ground&&Math.random()<0.05};},
+ pace(h,A){A.ph=(A.ph||0)+1/60;const k=Math.floor(A.ph/1.5)%2;return {to:add(h.ai.home,[k?6:-6,0,0]),s:0.5};},
+ lead(h,A){const p=G.player;const f=[Math.sin(p.yaw*D2R),0,Math.cos(p.yaw*D2R)];return {to:add(p.pos,mul(f,-10)),s:1.2};},
+ chase_weakest(h,A){let b=null;alive(G.humans).forEach(o=>{if(o!==h&&(!b||o.hp<b.hp))b=o;});return b?{to:b.pos,s:1}:null;},
+ chase_farthest(h,A){let b=null,bd=-1;alive(G.humans).forEach(o=>{if(o===h)return;const d=len(sub(o.pos,h.pos));if(d>bd){bd=d;b=o;}});return b?{to:b.pos,s:1}:null;},
+ scatter(h,A){const [o,d]=nearestHum(h,o=>o.kind==='bot');if(!o||d>25)return {stop:1};return {away:o.pos,s:0.8};},
+ line_up(h,A){const B=G.bots.filter(o=>o.bx&&o.bx.mode==='line_up');const i=B.indexOf(h);return {to:add(A.base||h.ai.home,[i*4,0,0]),s:0.8,face:G.player.pos};},
+ crowd(h,A){const p=G.player;if(p.dead)return null;return flat(p.pos,h.pos)>3.2?{to:p.pos,s:1.1}:{stop:1,face:p.pos};},
+ wander_in(h,A,dt){const P=A.part&&findPart(A.part);if(!P)return MODES.roam(h,A,dt);A.t=(A.t||0)-dt;if(A.t<=0||!A.goal){const s=P.st.Size;A.goal=add(P.st.Position,[rnd(-s[0]/2,s[0]/2)*0.9,0,rnd(-s[2]/2,s[2]/2)*0.9]);A.t=3+Math.random()*3;}return {to:A.goal,s:0.6};},
+ revenge(h,A){if(!A.hurt)return {stop:1};const p=A.hurt;return p.dead?null:{to:p.pos,s:1.2};},
+ coward(h,A){const p=G.player;if(h.hp<h.max*(A.r||0.3))return {away:p.pos,s:1.2};return p.dead?null:{to:p.pos,s:1};},
+ spin_in_place(h,A,dt){h.yaw+=dt*(A.r||180);return {stop:1};},
+ moonwalk(h,A){const p=G.player;if(p.dead)return null;const [x,z]=dirTo(h,p.pos);return {d:[x,z],s:0.7,face:add(h.pos,[-x*5,0,-z*5])};},
+ seek(h,A){const n=nrmName(A.part||'coin');let b=null,bd=1e9;G.parts.forEach(P=>{if(!P.alive||!nrmName(P.o.name).includes(n))return;const d=flat(P.st.Position,h.pos);if(d<bd){bd=d;b=P;}});return b?{to:b.st.Position,s:1}:null;},
+ avoid(h,A){const n=nrmName(A.part||'lava');let b=null,bd=1e9;G.parts.forEach(P=>{if(!P.alive||!nrmName(P.o.name).includes(n))return;const d=flat(P.st.Position,h.pos);if(d<bd){bd=d;b=P;}});if(b&&bd<(A.r||15))return {away:b.st.Position,s:1};return MODES.roam(h,A,1/60);},
+ tag(h,A){const p=G.player;if(G.bxIt===h)return p.dead?null:{to:p.pos,s:1.15};if(G.bxIt===p)return {away:p.pos,s:1};return {stop:1};},
+ waypoint_random(h,A){const pts=(A.pts||[]).map(n=>findPart(n)).filter(Boolean);if(!pts.length)return null;if(!A.cur||flat(A.cur.st.Position,h.pos)<2.5)A.cur=pick(pts);return {to:A.cur.st.Position,s:0.8};},
+ keep_distance(h,A){const p=G.player;const L=flat(p.pos,h.pos);const r=A.r||10;if(L<r-1)return {away:p.pos,s:1};if(L>r+1)return {to:p.pos,s:1};return {stop:1,face:p.pos};},
+ follow_trail(h,A){const p=G.player;A.tr=A.tr||[];const last=A.tr[A.tr.length-1];if(!last||len(sub(last,p.pos))>2)A.tr.push(p.pos.slice());if(A.tr.length>200)A.tr.shift();const g=A.tr[0];if(!g)return null;if(flat(g,h.pos)<2)A.tr.shift();return A.tr.length>3?{to:g,s:1}:{stop:1};},
+ charge(h,A,dt){const p=G.player;if(p.dead)return null;A.cd=(A.cd||0)-dt;if(A.dir&&A.cd>1.2){return {d:A.dir,s:2.4};}if(A.cd<=0){const [x,z]=dirTo(h,p.pos);A.dir=[x,z];A.cd=2.4;}return {stop:1,face:p.pos};},
+ random_walk(h,A,dt){A.t=(A.t||0)-dt;if(A.t<=0){const a=Math.random()*6.28;A.dir=[Math.cos(a),Math.sin(a)];A.t=0.6+Math.random();}return {d:A.dir||[1,0],s:0.6};},
+ return_patrol(h,A){const p=G.player;const L=len(sub(p.pos,h.pos));if(!p.dead&&L<(A.r||15))return {to:p.pos,s:1};return flat(h.ai.home,h.pos)>2?{to:h.ai.home,s:0.7}:{stop:1};},
+};
+const b0=botBrain;botBrain=function(h,dt){const A=h.bx;if(!A||!A.mode||!MODES[A.mode]||h.dead){return b0.apply(this,arguments);}
+ h.input.jump=false;const r=MODES[A.mode](h,A,dt);let dx=0,dz=0,s=1;
+ if(r&&r.to){const [x,z,L]=dirTo(h,r.to);if(L>1.5){dx=x;dz=z;}s=r.s;}else if(r&&r.away){const [x,z]=dirTo(h,r.away);dx=-x;dz=-z;s=r.s;}else if(r&&r.d){const L=Math.hypot(r.d[0],r.d[1])||1;dx=r.d[0]/L;dz=r.d[1]/L;s=r.s;}
+ h.input.x=dx*s;h.input.y=dz*s;if(r&&r.jump)h.input.jump=true;
+ if(r&&r.face){const d=sub(r.face,h.pos);h.faceYaw=Math.atan2(d[0],d[2])/D2R;if(r.stop||!(dx||dz))h.yaw=h.faceYaw;}
+ if(dx||dz){const sp=Math.hypot(h.vel[0],h.vel[2]);if(sp<h.walk*0.2){A.stuck=(A.stuck||0)+dt;if(A.stuck>0.35){h.input.jump=true;A.stuck=0;}}else A.stuck=0;}
+ if(h.ai.jump>0){h.ai.jump-=dt;h.input.jump=true;}};
+const M=(name,mode,help,ex,setup)=>NB(name,help,ex,(c,h,a)=>{if(h.kind!=='bot')return;const A=X(h);A.mode=mode;A.ph=0;A.t=0;A.goal=null;A.awake=0;A.i=0;if(setup)setup(A,a,h,c);h.ai.mode='BX';});
+M('kite','kite','keeps its distance from the player, backing off when close','#kite = 18',(A,a)=>A.r=nm(a,18));
+M('ambush','ambush','waits still until the player comes close, then attacks','#ambush = 14',(A,a)=>A.r=nm(a,14));
+M('strafe','strafe','runs circles around the player','#strafe = 12',(A,a)=>A.r=nm(a,12));
+M('herd','herd','stays with the group of other bots','#herd');
+M('swarm','swarm','surrounds the player with the other swarming bots','#swarm');
+M('sentry','sentry','stands guard and turns to watch the player','#sentry = 30',(A,a)=>A.r=nm(a,30));
+M('roam','roam','wanders far around the map','#roam = 120',(A,a)=>A.r=nm(a,120));
+M('go_home','go_home','walks back to where it started','#go_home');
+M('hide','hide','hides behind the nearest wall or big part, away from the player','#hide');
+M('stalk','stalk','creeps up only while the player looks away','#stalk');
+M('zigzag_chase','zigzag','chases the player in a zigzag','#zigzag_chase');
+M('hop_chase','hop_chase','chases the player while hopping','#hop_chase');
+M('shy','shy','comes closer but backs off when the player moves at it','#shy');
+M('bot_dance','dance','spins and hops on the spot','#bot_dance');
+M('mirror_player','mirror','moves to the mirror spot of the player around its home','#mirror_player');
+M('chase_bots','chase_bots','chases the nearest other bot','#chase_bots');
+M('protect','protect','stays by someone and runs at bots that come close to them','#protect = player_main',(A,a)=>A.who=key(a||'player_main'));
+M('orbit_part_bot','orbit_part','walks circles around a part','#orbit_part_bot = Tower',(A,a)=>{const [n,r]=String(a).split(':');A.part=key(n);A.r=r?nm(r,0):0;});
+M('walk_path','path','walks along parts in order, then loops','#walk_path = P1, P2, P3',(A,a)=>{A.pts=String(a).split(',').map(key).filter(Boolean);A.once=0;});
+M('walk_path_once','path','walks along parts in order and stops at the last one','#walk_path_once = P1, P2, P3',(A,a)=>{A.pts=String(a).split(',').map(key).filter(Boolean);A.once=1;});
+M('run_far','run_far','runs away from the player without stopping','#run_far');
+M('jumpy','jumpy','wanders while jumping now and then','#jumpy');
+M('pace','pace','paces back and forth in a short line','#pace');
+M('lead','lead','walks ahead of the player, like a guide','#lead');
+M('chase_weakest','chase_weakest','chases whoever has the least health','#chase_weakest');
+M('chase_farthest','chase_farthest','chases whoever is farthest away','#chase_farthest');
+M('scatter','scatter','moves away from other bots','#scatter');
+M('line_up','line_up','stands in a line with the other lining-up bots','#line_up');
+M('crowd_player','crowd','stands right up against the player','#crowd_player');
+M('wander_in','wander_in','wanders around inside a part\'s area','#wander_in = Pen',(A,a)=>A.part=key(a));
+M('revenge','revenge','stays put until someone hurts it, then chases them','#revenge');
+M('coward','coward','chases the player but runs when its health is low','#coward = 0.3',(A,a)=>A.r=nm(a,0.3));
+M('spin_bot','spin_in_place','spins on the spot','#spin_bot = 180',(A,a)=>A.r=nm(a,180));
+M('moonwalk','moonwalk','walks backwards toward the player','#moonwalk');
+M('seek_part','seek','walks to the nearest part with that name','#seek_part = Coin',(A,a)=>A.part=key(a||'coin'));
+M('avoid_part','avoid','roams but keeps away from parts with that name','#avoid_part = Lava : 15',(A,a)=>{const [n,r]=String(a).split(':');A.part=key(n);A.r=r?nm(r,15):15;});
+M('play_tag','tag','plays tag: chases when it is "it", runs away when the player is','#play_tag',(A,a,h)=>{if(!G.bxIt)G.bxIt=h;});
+M('wander_waypoints','waypoint_random','walks between random parts from a list','#wander_waypoints = A, B, C',(A,a)=>A.pts=String(a).split(',').map(key).filter(Boolean));
+M('keep_distance','keep_distance','stays exactly this far from the player','#keep_distance = 10',(A,a)=>A.r=nm(a,10));
+M('follow_trail','follow_trail','follows the exact path the player walked','#follow_trail');
+M('charge','charge','stops, aims, then charges at the player in a straight line','#charge');
+M('random_walk','random_walk','walks in random directions, changing often','#random_walk');
+M('guard_return','return_patrol','chases the player when close, then walks back home','#guard_return = 15',(A,a)=>A.r=nm(a,15));
+NB('brain_off','go back to the normal bot brain','#brain_off',(c,h)=>{if(h.bx)h.bx.mode=null;h.ai.mode='Idle';});
+
+/* --- bot stats and powers --- */
+const sh0=stepHumanoid;stepHumanoid=function(h,dt){sh0.apply(this,arguments);const A=h.bx;if(!A||h.dead||!G)return;
+ const p=G.player;const Lp=len(sub(p.pos,h.pos));
+ if(A.regen)h.hp=Math.min(h.max,h.hp+A.regen*dt);
+ if(A.greet&&Lp<10&&!A.greeted){A.greeted=1;say(h,A.greet,3);}if(A.greet&&Lp>20)A.greeted=0;
+ if(A.chatter&&A.chatter.length){A.ct=(A.ct||rnd(2,6))-dt;if(A.ct<=0){A.ct=rnd(4,9);say(h,pick(A.chatter),2.5);}}
+ if(A.shoot&&!p.dead&&Lp<(A.shootR||60)){A.sct=(A.sct||A.shoot)-dt;if(A.sct<=0){A.sct=A.shoot;botShot(h,p,A.shotCol||'#ff5a3d',A.shotDmg||10);}}
+ if(A.throwT&&!p.dead&&Lp<70){A.tct=(A.tct||A.throwT)-dt;if(A.tct<=0){A.tct=A.throwT;const d=sub(p.pos,h.pos);const b=spawnNow({Shape:'Ball',Size:[1.6,1.6,1.6],Color:'#7a5a3a',Material:'Slate',Position:add(h.pos,[0,4*h.size,0]),Anchored:false,Name:'Thrown'});b.vel=[d[0]*1.1,40+d[1],d[2]*1.1];later(6,()=>{b.alive=false;});}}
+ if(A.leap&&!p.dead&&Lp<(A.leapR||20)&&Lp>5&&h.ground){A.lct=(A.lct||0)-dt;if(A.lct<=0){A.lct=A.leap;const d=sub(p.pos,h.pos);h.vel=[d[0]*2.2,45,d[2]*2.2];h.ground=false;}}else if(A.leap)A.lct=(A.lct||0)-dt;
+ if(A.blink){A.bct=(A.bct||A.blink)-dt;if(A.bct<=0){A.bct=A.blink;const np=add(h.ai.home,[rnd(-25,25),2,rnd(-25,25)]);G.rings.push({p:h.pos.slice(),t:0,col:'#b480ff',r:4});h.pos=np;h.vel=[0,0,0];G.rings.push({p:np.slice(),t:0,col:'#b480ff',r:4});}}
+ if(A.behind){A.bhd=(A.bhd||A.behind)-dt;if(A.bhd<=0&&!p.dead){A.bhd=A.behind;const f=[Math.sin(p.yaw*D2R),0,Math.cos(p.yaw*D2R)];h.pos=add(p.pos,add(mul(f,4),[0,1,0]));h.vel=[0,0,0];sfx('whoosh');}}
+ if(A.hideFar!=null){h.bxHidden=Lp>A.hideFar;}
+ if(A.aura){alive(G.humans).forEach(o=>{if(o!==h&&o.kind!=='bot'&&len(sub(o.pos,h.pos))<A.auraR)hurtHumanoid(o,A.aura*dt);});}
+ if(A.healAura){alive(G.bots).forEach(o=>{if(len(sub(o.pos,h.pos))<A.healR)o.hp=Math.min(o.max,o.hp+A.healAura*dt);});}
+ if(A.summon){A.sm=(A.sm||A.summon)-dt;if(A.sm<=0&&G.bots.length<60){A.sm=A.summon;const o={id:'b'+Math.random(),cls:'Bot',name:h.o.name+'_minion',props:Object.assign(clone(h.o.props),{Position:add(h.pos,[rnd(-4,4),1,rnd(-4,4)]),Scale:(h.size||1)*0.6,Health:Math.max(10,h.max*0.3)}),code:'#chase'};addBot(o);}}
+ if(A.trail){A.trt=(A.trt||0)-dt;if(A.trt<=0){A.trt=0.08;G.particles.push({p:add(h.pos,[0,0.5,0]),v:[0,2,0],t:0,life:1.2,col:A.trail,sz:4,g:0});}}
+ if(A.lookAt){const d=sub(p.pos,h.pos);h.yaw=Math.atan2(d[0],d[2])/D2R;}
+ if(A.growT){h.size=Math.min(A.growMax||4,h.size+dt*A.growT);}
+};
+function botShot(h,o,col,dmg){const from=add(h.pos,[0,2.5*h.size,0]),to=add(o.pos,[0,2,0]);const d=norm(sub(to,from));const b={p:from.slice(),v:mul(d,90),t:0,col,dmg,src:h};SHOTS.push(b);sfx('laser');}
+const SHOTS=[];
+const g0=gameStep;gameStep=function(dt0){g0.apply(this,arguments);if(!G)return;const dt=dt0*G.ts;
+ for(let i=SHOTS.length-1;i>=0;i--){const s=SHOTS[i];s.t+=dt;s.p=add(s.p,mul(s.v,dt));G.particles.push({p:s.p.slice(),v:[0,0,0],t:0,life:0.15,col:s.col,sz:5,g:0});let hit=false;
+  G.humans.forEach(o=>{if(hit||o===s.src||o.dead||(s.src.kind==='bot'&&o.kind==='bot'))return;if(len(sub(add(o.pos,[0,2*o.size,0]),s.p))<2.2*o.size){hit=true;G.killer=s.src;hurtHumanoid(o,s.dmg);}});
+  if(hit||s.t>2)SHOTS.splice(i,1);}
+ bxGame(dt);bxZones(dt);bxPickups(dt);};
+const h0=hurtHumanoid;hurtHumanoid=function(h,n){if(!h)return;let k=n;const K=G&&G.killer;
+ if(G&&G.bxRules){const R=G.bxRules;if(K&&K.kind==='bot'&&h.kind!=='bot'&&R.botDmg!=null)k*=R.botDmg;if(R.friendly&&K&&K.kind==='bot'&&h.kind==='bot')return;if(R.dmgMul!=null)k*=R.dmgMul;}
+ if(h.bx&&h.bx.armor)k*=Math.max(0,1-h.bx.armor);if(h.bx&&h.bx.dodge&&Math.random()<h.bx.dodge){say(h,'missed!',0.8);return;}
+ const before=h.hp;h0.call(this,h,k);if(h.hp<before&&h.bx){if(h.bx.mode==='revenge'&&K&&K!==h)h.bx.hurt=K;if(h.bx.ouch)say(h,h.bx.ouch,1.2);}
+ if(h.hp<before&&K&&K!==h&&K.bx&&len(sub(K.pos,h.pos))<14*Math.max(1,K.size)){const A=K.bx;
+  if(A.knock){const d=norm(sub(h.pos,K.pos));h.vel=add(h.vel,[d[0]*A.knock,A.knock*0.5,d[2]*A.knock]);h.ground=false;}
+  if(A.slowHit)h.slowT=Math.max(h.slowT||0,A.slowHit);if(A.freezeHit)h.frozen=Math.max(h.frozen||0,A.freezeHit);
+  if(A.poison){const t0=G.t;const tick=()=>{if(!G||h.dead||G.t-t0>A.poison)return;h0(h,2);later(0.5,tick);};later(0.5,tick);}
+  if(A.steal){K.hp=Math.min(K.max,K.hp+(before-h.hp)*A.steal);}
+  if(A.stealCoins&&h.stats){const s=Math.min(h.stats.coins||0,A.stealCoins);h.stats.coins=(h.stats.coins||0)-s;}}};
+const k0=killHumanoid;killHumanoid=function(h,why){const wasDead=h&&h.dead;k0.apply(this,arguments);if(!h||wasDead||!h.dead||!G)return;const A=h.bx||{};const K=G.killer;
+ if(A.boom)explodeAt(add(h.pos,[0,2,0]),A.boom);
+ if(A.dropCoins){for(let i=0;i<A.dropCoins;i++)dropPickup(add(h.pos,[rnd(-2,2),1.5,rnd(-2,2)]),'coin',1);}
+ if(A.dropItem)dropPickup(add(h.pos,[0,1.5,0]),A.dropItem,1);
+ if(A.split&&(h.size||1)>0.4){for(let i=0;i<2;i++){const o={id:'b'+Math.random(),cls:'Bot',name:h.o.name+'_half',props:Object.assign(clone(h.o.props),{Position:add(h.pos,[i?2:-2,1,0]),Scale:(h.size||1)*0.6,Health:Math.max(10,h.max/2)}),code:h.o.code};const nb=addBot(o);nb.bx=Object.assign({},A,{split:A.split-1});nb.size=(h.size||1)*0.6;if(nb.bx.split<=0)nb.bx.split=0;}}
+ if(A.lastWords)say(h,A.lastWords,2);
+ if(K&&K!==h&&K.bx&&K.bx.growKill){K.size=Math.min(4,(K.size||1)*1.15);}
+ const R=G.bxRules||{};if(h.kind==='bot'&&K&&K.kind!=='bot'){if(R.killReward)K.stats.coins=(K.stats.coins||0)+R.killReward;}
+ if(h.kind!=='bot'&&R.deathPenalty)h.stats.coins=Math.max(0,(h.stats.coins||0)-R.deathPenalty);
+ if(h.kind!=='bot'&&R.lives!=null){h.lives=(h.lives==null?R.lives:h.lives)-1;toastMsg('Lives left: '+Math.max(0,h.lives));if(h.lives<=0){h.respawn=false;later(1.2,()=>{showTitle(R.loseMsg||'GAME OVER',4);sfx('gameover');fireAll('on_lose');});}}
+ if(h.kind!=='bot'&&R.noRespawn)h.respawn=false;};
+const S1=(name,help,ex,f)=>NB(name,help,ex,(c,h,a)=>{f(X(h),a,h,c);});
+S1('bot_armor','takes less damage (0 to 1)','#bot_armor = 0.5',(A,a)=>A.armor=Math.min(1,nm(a,0.5)));
+S1('bot_dodge','chance to dodge each hit (0 to 1)','#bot_dodge = 0.3',(A,a)=>A.dodge=Math.min(1,nm(a,0.3)));
+S1('bot_regen','heals this much health every second','#bot_regen = 5',(A,a)=>A.regen=nm(a,5));
+S1('bot_greet','says something when the player walks up','#bot_greet = Hello there!',(A,a)=>A.greet=String(a||'Hi!'));
+S1('bot_chatter','says random lines from a list now and then','#bot_chatter = Nice day, Hmm, Where is my hat?',(A,a)=>A.chatter=String(a).split(',').map(s=>s.trim()).filter(Boolean));
+S1('bot_ouch','says this when it gets hurt','#bot_ouch = Ow!',(A,a)=>A.ouch=String(a||'Ow!'));
+S1('bot_last_words','says this when it dies','#bot_last_words = I will return',(A,a)=>A.lastWords=String(a||'...'));
+S1('bot_shoot','shoots at the player every few seconds','#bot_shoot = 2s',(A,a)=>{A.shoot=Math.max(0.2,TT(a)||2);});
+S1('bot_shot_damage','damage of each shot','#bot_shot_damage = 15',(A,a)=>A.shotDmg=nm(a,10));
+S1('bot_shot_color','color of its shots','#bot_shot_color = lime',(A,a)=>A.shotCol=COLOR_HEX(colorArg(a||'red')));
+S1('bot_shoot_range','how far away it starts shooting','#bot_shoot_range = 60',(A,a)=>A.shootR=nm(a,60));
+S1('bot_throw','lobs rocks at the player every few seconds','#bot_throw = 3s',(A,a)=>A.throwT=Math.max(0.3,TT(a)||3));
+S1('bot_leap','leaps at the player when close','#bot_leap = 2s',(A,a)=>A.leap=Math.max(0.3,TT(a)||2));
+S1('bot_blink','teleports around its home every few seconds','#bot_blink = 4s',(A,a)=>A.blink=Math.max(0.5,TT(a)||4));
+S1('bot_appear_behind','appears behind the player every few seconds','#bot_appear_behind = 8s',(A,a)=>A.behind=Math.max(1,TT(a)||8));
+S1('bot_hide_far','is invisible when the player is farther than this','#bot_hide_far = 30',(A,a)=>A.hideFar=nm(a,30));
+S1('bot_aura','hurts players standing close to it (damage per second : range)','#bot_aura = 10 : 8',(A,a)=>{const [d,r]=String(a).split(':');A.aura=nm(d,10);A.auraR=r?nm(r,8):8;});
+S1('bot_heal_aura','heals nearby bots (per second : range)','#bot_heal_aura = 10 : 12',(A,a)=>{const [d,r]=String(a).split(':');A.healAura=nm(d,10);A.healR=r?nm(r,12):12;});
+S1('bot_summon','calls in a small minion every few seconds','#bot_summon = 10s',(A,a)=>A.summon=Math.max(2,TT(a)||10));
+S1('bot_trail','leaves a trail of colored puffs','#bot_trail = purple',(A,a)=>A.trail=COLOR_HEX(colorArg(a||'white')));
+S1('bot_stare','always turns to face the player','#bot_stare',(A)=>A.lookAt=1);
+S1('bot_grow','slowly grows bigger (speed : max size)','#bot_grow = 0.05 : 3',(A,a)=>{const [s,m]=String(a).split(':');A.growT=nm(s,0.05);A.growMax=m?nm(m,3):3;});
+S1('bot_knockback','its hits knock people back','#bot_knockback = 60',(A,a)=>A.knock=nm(a,60));
+S1('bot_slow_hit','its hits slow people down for a time','#bot_slow_hit = 3s',(A,a)=>A.slowHit=TT(a)||3);
+S1('bot_freeze_hit','its hits freeze people for a time','#bot_freeze_hit = 1s',(A,a)=>A.freezeHit=TT(a)||1);
+S1('bot_poison_hit','its hits poison people for a time','#bot_poison_hit = 4s',(A,a)=>A.poison=TT(a)||4);
+S1('bot_lifesteal','heals itself by part of the damage it does','#bot_lifesteal = 0.5',(A,a)=>A.steal=nm(a,0.5));
+S1('bot_steal_coins','takes coins from whoever it hits','#bot_steal_coins = 5',(A,a)=>A.stealCoins=nm(a,5));
+S1('bot_explode_on_death','explodes when it dies','#bot_explode_on_death = 10',(A,a)=>A.boom=nm(a,10));
+S1('bot_drop_coins','drops coins when it dies','#bot_drop_coins = 3',(A,a)=>A.dropCoins=Math.min(30,Math.round(nm(a,3))));
+S1('bot_drop_item','drops an item when it dies','#bot_drop_item = red key',(A,a)=>A.dropItem=key(a||'gem'));
+S1('bot_split','splits into two smaller bots when it dies','#bot_split = 2',(A,a)=>A.split=Math.round(nm(a,1)));
+S1('bot_grow_on_kill','gets bigger every time it defeats someone','#bot_grow_on_kill',(A)=>A.growKill=1);
+NB('bot_health','sets its health and max health','#bot_health = 300',(c,h,a)=>{h.max=nm(a,100);h.hp=h.max;});
+NB('bot_jump_power','how high it jumps','#bot_jump_power = 80',(c,h,a)=>{h.jp=nm(a,50);});
+NB('bot_size','how big it is','#bot_size = 2',(c,h,a)=>{h.size=Math.max(0.2,Math.min(10,nm(a,1)));h.baseSize=h.size;});
+NB('bot_name','the name shown above it','#bot_name = Gary',(c,h,a)=>{h.name=String(a||'Bot');});
+NB('bot_team','puts it on a team (team bots don\'t chase teammates)','#bot_team = Red',(c,h,a)=>{h.team=String(a||'');});
+NB('bot_pushable','lets players push it around','#bot_pushable',(c,h)=>{h.pushable=true;});
+NB('bot_unpushable','players can\'t push it','#bot_unpushable',(c,h)=>{h.pushable=false;});
+NB('bot_home_here','makes where it stands now its home','#bot_home_here',(c,h)=>{h.ai.home=h.pos.slice();});
+NB('bot_home','sets its home spot (x,y,z or a part)','#bot_home = Base',(c,h,a)=>{const P=findPart(a);h.ai.home=P?P.st.Position.slice():parseVec(a,h.pos);});
+NB('bot_leap_now','jumps at the player once, right now','#bot_leap_now',(c,h)=>{const d=sub(G.player.pos,h.pos);h.vel=[d[0]*2.2,45,d[2]*2.2];h.ground=false;});
+NB('bot_shoot_now','fires one shot at the player right now','#bot_shoot_now',(c,h)=>{botShot(h,G.player,(h.bx&&h.bx.shotCol)||'#ff5a3d',(h.bx&&h.bx.shotDmg)||10);});
+NB('bot_teleport_home','teleports straight back home','#bot_teleport_home',(c,h)=>{h.pos=h.ai.home.slice();h.vel=[0,0,0];});
+NB('bot_clone','makes a copy of itself next to it','#bot_clone',(c,h)=>{if(G.bots.length>=80)return;const o={id:'b'+Math.random(),cls:'Bot',name:h.o.name,props:Object.assign(clone(h.o.props),{Position:add(h.pos,[3,1,0])}),code:h.o.code};addBot(o);});
+NB('make_it','makes someone "it" for a game of tag','#make_it = toucher',(c,h)=>{G.bxIt=h;say(h,"I'm it!",2);});
+
+/* ======================= weather ======================= */
+const W={kind:null,amt:1,wind:0,drops:[],flashT:0,nextBolt:0};window.bxWeather=W;
+const WK=(name,help,kind,setup)=>ADD('Weather',name,help,'#'+name+(setup?' = 1':''),(c,a)=>{W.kind=kind;W.amt=Math.max(0.1,Math.min(3,nm(a,1)));W.drops=[];if(setup)setup(a);});
+WK('weather_rain','rain falls all over the world (amount)','rain',()=>{});
+WK('weather_snow','snowflakes drift down all over the world (amount)','snow',()=>{});
+WK('hail','hard little hailstones bounce down (amount)','hail',()=>{});
+WK('sleet','a mix of rain and wet snow (amount)','sleet',()=>{});
+WK('sandstorm','a dusty storm blows sand sideways (amount)','sand',()=>{S.lighting.FogColor='#c9a26b';S.lighting.FogEnd=260;S.lighting.FogStart=0;});
+WK('thunderstorm','rain with lightning flashes and thunder (amount)','storm',()=>{W.nextBolt=2;});
+WK('fireflies','glowing fireflies float around (amount)','flies',()=>{});
+WK('falling_leaves','autumn leaves flutter down (amount)','leaves',()=>{});
+WK('cherry_blossoms','pink petals drift on the breeze (amount)','petals',()=>{});
+WK('ash_fall','grey ash falls like after a volcano (amount)','ash',()=>{});
+WK('meteor_shower','shooting stars streak across the sky (amount)','meteors',()=>{});
+WK('bubbles_rising','bubbles float up like being underwater (amount)','bubbles',()=>{});
+WK('dust_motes','tiny specks hang in the light (amount)','motes',()=>{});
+WK('blizzard','heavy blowing snow that hides the distance (amount)','blizzard',()=>{S.lighting.FogColor='#dfe6ee';S.lighting.FogEnd=180;S.lighting.FogStart=0;W.wind=Math.max(W.wind,1.4);});
+ADD('Weather','clear_weather','stops all weather','#clear_weather',()=>{W.kind=null;W.drops=[];W.wind=0;});
+ADD('Weather','weather_wind','how hard weather blows sideways (-3 to 3)','#weather_wind = 1',(c,a)=>{W.wind=Math.max(-3,Math.min(3,nm(a,1)));});
+ADD('Weather','weather_amount','how heavy the current weather is (0.1 to 3)','#weather_amount = 2',(c,a)=>{W.amt=Math.max(0.1,Math.min(3,nm(a,1)));});
+ADD('Weather','lightning_strike','a lightning bolt hits the ground (somewhere, or x,y,z, or a part)','#lightning_strike = Tree',(c,a)=>{let p;const P=a&&findPart(a);if(P)p=P.st.Position.slice();else if(a&&/,/.test(a))p=parseVec(a,[0,0,0]);else p=add(G.player.pos,[rnd(-60,60),0,rnd(-60,60)]);bolt(p,true);});
+ADD('Weather','aurora','green and violet ribbons shimmer in the sky','#aurora',()=>{W.aurora=1;});
+ADD('Weather','no_aurora','hides the aurora','#no_aurora',()=>{W.aurora=0;});
+ADD('Weather','sky_rainbow','a rainbow arc appears in the sky','#sky_rainbow',()=>{W.rainbow=1;});
+ADD('Weather','no_sky_rainbow','hides the sky rainbow','#no_sky_rainbow',()=>{W.rainbow=0;});
+ADD('Weather','rain_hurts','the rain hurts people out in it (damage per second)','#rain_hurts = 2',(c,a)=>{W.hurt=nm(a,2);});
+ADD('Weather','weather_cycle','changes the weather every so often','#weather_cycle = 30s',(c,a)=>{W.cycle=Math.max(5,TT(a)||30);W.cycT=W.cycle;});
+ADD('Weather','stop_weather_cycle','stops changing the weather','#stop_weather_cycle',()=>{W.cycle=0;});
+function bolt(p,hit){const top=add(p,[rnd(-10,10),160,rnd(-10,10)]);const segs=[top];let q=top.slice();for(let i=0;i<12;i++){q=[q[0]+(p[0]-q[0])/(12-i)+rnd(-5,5),q[1]-(q[1]-p[1])/(12-i),q[2]+(p[2]-q[2])/(12-i)+rnd(-5,5)];segs.push(q.slice());}segs[segs.length-1]=p.slice();
+ W.bolts=(W.bolts||[]).concat([{segs,t:0}]);W.flashT=0.25;G.flash=Math.max(G.flash||0,0.12);later(0.4+Math.random()*0.8,()=>sfx('thunder'));
+ if(hit){G.rings.push({p:p.slice(),t:0,col:'#e8f0ff',r:8});alive(G.humans).forEach(h=>{if(flat(h.pos,p)<6){G.killer=null;hurtHumanoid(h,40);}});}}
+const KINDS=['rain','snow','hail','sleet','sand','storm','flies','leaves','petals','ash','meteors','bubbles','motes','blizzard',null];
+function weatherStep(dt){if(!G)return;if(W.cycle){W.cycT-=dt;if(W.cycT<=0){W.cycT=W.cycle;W.kind=pick(KINDS);W.drops=[];}}
+ if(W.kind==='storm'){W.nextBolt-=dt;if(W.nextBolt<=0){W.nextBolt=3+Math.random()*7;bolt(add(G.player.pos,[rnd(-120,120),0,rnd(-120,120)]),Math.random()<0.3);}}
+ if(W.hurt&&['rain','storm','sleet','hail'].includes(W.kind)){alive(G.humans).forEach(h=>{if(h.kind==='bot')return;const o=add(h.pos,[0,4*h.size,0]);let roof=false;solidsNear(o,40).forEach(P=>{if(!roof&&rayOBB(o,[0,1,0],P.obb,60)!=null)roof=true;});if(!roof)hurtHumanoid(h,W.hurt*dt);});}
+ (W.bolts||[]).forEach(b=>b.t+=dt);W.bolts=(W.bolts||[]).filter(b=>b.t<0.35);if(W.flashT>0)W.flashT-=dt;}
+const RB=['#ff4040','#ff9a2e','#ffe14a','#4fd16b','#3f8cff','#5a4be0','#a35be0'];
+const d0=drawOverlay;drawOverlay=function(){d0.apply(this,arguments);if(!G)return;const w=ov.width,hh=ov.height,s=w/Math.max(1,ov.clientWidth);
+ /* sky things */
+ if(W.aurora){const t=G.t;for(let k=0;k<3;k++){oc.save();oc.globalCompositeOperation='lighter';oc.beginPath();for(let x=0;x<=w;x+=8*s){const y=hh*(0.12+0.05*k)+Math.sin(x/(180*s)+t*0.4+k)*28*s+Math.sin(x/(70*s)-t*0.7)*10*s;x?oc.lineTo(x,y):oc.moveTo(x,y);}
+   const g=oc.createLinearGradient(0,hh*0.05,0,hh*0.4);g.addColorStop(0,'rgba(120,70,220,0)');g.addColorStop(0.45,k===1?'rgba(170,90,255,0.16)':'rgba(70,255,170,0.18)');g.addColorStop(1,'rgba(40,200,140,0)');oc.lineWidth=60*s;oc.strokeStyle=g;oc.globalAlpha=0.55+0.25*Math.sin(t*0.9+k);oc.stroke();oc.restore();}}
+ if(W.rainbow){const P2=project(add(G.player.pos,[0,0,-900]));const cx=P2?P2[0]:w/2,cy=hh*0.75;const R=Math.min(w,hh)*0.75;oc.save();oc.globalAlpha=0.22;RB.forEach((col,i)=>{oc.strokeStyle=col;oc.lineWidth=7*s;oc.beginPath();oc.arc(cx,cy,R-i*7*s,Math.PI,2*Math.PI);oc.stroke();});oc.restore();}
+ (W.bolts||[]).forEach(b=>{const pts=b.segs.map(project);if(pts.some(p=>!p))return;oc.save();oc.globalAlpha=Math.max(0,1-b.t/0.35);oc.strokeStyle='#eef3ff';oc.shadowColor='#9bb8ff';oc.shadowBlur=18*s;oc.lineWidth=3*s;oc.beginPath();pts.forEach((p,i)=>i?oc.lineTo(p[0],p[1]):oc.moveTo(p[0],p[1]));oc.stroke();oc.restore();});
+ if(W.flashT>0){oc.fillStyle='rgba(225,232,255,'+(W.flashT*0.9)+')';oc.fillRect(0,0,w,hh);}
+ if(!W.kind)return;const k=W.kind,amt=W.amt;const target=Math.round({rain:260,storm:380,snow:200,hail:140,sleet:240,sand:300,flies:40,leaves:45,petals:60,ash:160,meteors:6,bubbles:50,motes:90,blizzard:420}[k]*amt);
+ const D=W.drops;while(D.length<target)D.push({x:Math.random(),y:Math.random(),z:0.3+Math.random()*0.7,ph:Math.random()*6.28,r:Math.random(),snow:Math.random()<0.5});if(D.length>target)D.length=target;
+ const dt=1/60,wind=W.wind+(k==='sand'?2.2:0)+(k==='blizzard'?1.2:0);
+ if(k==='sand'){oc.fillStyle='rgba(196,150,90,'+(0.18*Math.min(1.5,amt))+')';oc.fillRect(0,0,w,hh);}
+ if(k==='storm'){oc.fillStyle='rgba(20,26,40,0.12)';oc.fillRect(0,0,w,hh);}
+ oc.save();oc.lineCap='round';
+ D.forEach(d=>{const z=d.z;
+  if(k==='rain'||k==='storm'||(k==='sleet'&&!d.snow)){d.y+=dt*(1.6+z*1.2);d.x+=dt*wind*0.25*z;const L=(16+z*22)*s;oc.strokeStyle='rgba(190,205,225,'+(0.18+z*0.35)+')';oc.lineWidth=(0.6+z*0.9)*s;oc.beginPath();const X0=d.x*w,Y0=d.y*hh;oc.moveTo(X0,Y0);oc.lineTo(X0-wind*0.25*L*0.4,Y0-L);oc.stroke();}
+  else if(k==='snow'||k==='blizzard'||k==='sleet'){d.y+=dt*(k==='blizzard'?0.35:0.12)*(0.5+z);d.x+=dt*(Math.sin(G.t*0.8+d.ph)*0.03+wind*0.12*z);const r=(1+z*2.6)*s;const g=oc.createRadialGradient(d.x*w,d.y*hh,0,d.x*w,d.y*hh,r);g.addColorStop(0,'rgba(255,255,255,'+(0.55+z*0.4)+')');g.addColorStop(1,'rgba(255,255,255,0)');oc.fillStyle=g;oc.beginPath();oc.arc(d.x*w,d.y*hh,r,0,7);oc.fill();}
+  else if(k==='hail'){d.v=(d.v||0)+dt*3;d.y+=dt*(1.4+z)+d.v*dt*0.2;if(d.y>0.92+d.r*0.08&&!d.b){d.b=1;d.v=-1.2;}d.x+=dt*wind*0.1;oc.fillStyle='rgba(235,242,250,'+(0.6+z*0.3)+')';oc.beginPath();oc.arc(d.x*w,d.y*hh,(1.2+z*1.6)*s,0,7);oc.fill();}
+  else if(k==='sand'){d.x+=dt*(0.8+z*1.4)*Math.sign(wind||1);d.y+=dt*Math.sin(G.t*3+d.ph)*0.04;oc.strokeStyle='rgba(222,184,125,'+(0.25+z*0.4)+')';oc.lineWidth=(0.8+z)*s;oc.beginPath();oc.moveTo(d.x*w,d.y*hh);oc.lineTo(d.x*w-(10+z*24)*s*Math.sign(wind||1),d.y*hh);oc.stroke();}
+  else if(k==='flies'){d.x+=dt*Math.sin(G.t*0.7+d.ph*3)*0.02;d.y+=dt*Math.cos(G.t*0.5+d.ph*2)*0.02;const on=0.5+0.5*Math.sin(G.t*2.4+d.ph*5);const r=(2+z*3)*s;const g=oc.createRadialGradient(d.x*w,d.y*hh,0,d.x*w,d.y*hh,r*3);g.addColorStop(0,'rgba(240,255,150,'+(0.9*on)+')');g.addColorStop(0.3,'rgba(190,255,90,'+(0.35*on)+')');g.addColorStop(1,'rgba(150,255,80,0)');oc.fillStyle=g;oc.beginPath();oc.arc(d.x*w,d.y*hh,r*3,0,7);oc.fill();}
+  else if(k==='leaves'||k==='petals'){d.y+=dt*(0.09+z*0.08);d.x+=dt*(Math.sin(G.t*1.3+d.ph)*0.08+wind*0.1);d.rot=(d.rot||d.ph)+dt*(1.5+d.r*2);const sz=(k==='leaves'?5:3.5)*(0.6+z)*s;oc.save();oc.translate(d.x*w,d.y*hh);oc.rotate(d.rot);oc.scale(1,Math.abs(Math.cos(d.rot*1.7))*0.8+0.2);
+   if(k==='leaves'){oc.fillStyle=['#c8642a','#d99a2b','#a8431f','#b97a2a'][Math.floor(d.r*4)];oc.beginPath();oc.moveTo(-sz,0);oc.quadraticCurveTo(0,-sz*0.8,sz,0);oc.quadraticCurveTo(0,sz*0.8,-sz,0);oc.fill();oc.strokeStyle='rgba(80,40,10,0.5)';oc.lineWidth=0.6*s;oc.beginPath();oc.moveTo(-sz,0);oc.lineTo(sz,0);oc.stroke();}
+   else{oc.fillStyle=d.r<0.5?'#ffc4d6':'#ffe0ea';oc.beginPath();oc.ellipse(0,0,sz,sz*0.6,0,0,7);oc.fill();}oc.restore();}
+  else if(k==='ash'){d.y+=dt*(0.05+z*0.05);d.x+=dt*(Math.sin(G.t+d.ph)*0.02+wind*0.06);oc.fillStyle='rgba('+(90+d.r*60|0)+','+(90+d.r*55|0)+','+(92+d.r*50|0)+','+(0.4+z*0.4)+')';oc.fillRect(d.x*w,d.y*hh,(1.2+z*2)*s,(1+z*1.4)*s);}
+  else if(k==='meteors'){if(!d.on){if(Math.random()<0.004*amt){d.on=1;d.x=Math.random()*0.9+0.1;d.y=Math.random()*0.3;d.t=0;}}else{d.t+=dt;d.x-=dt*0.6;d.y+=dt*0.25;const L=90*s,a=Math.max(0,1-d.t/0.9);const g=oc.createLinearGradient(d.x*w,d.y*hh,d.x*w+L,d.y*hh-L*0.42);g.addColorStop(0,'rgba(255,255,255,'+a+')');g.addColorStop(1,'rgba(160,200,255,0)');oc.strokeStyle=g;oc.lineWidth=2*s;oc.beginPath();oc.moveTo(d.x*w,d.y*hh);oc.lineTo(d.x*w+L,d.y*hh-L*0.42);oc.stroke();if(d.t>0.9)d.on=0;}return;}
+  else if(k==='bubbles'){d.y-=dt*(0.06+z*0.08);d.x+=dt*Math.sin(G.t*2+d.ph)*0.02;const r=(2+z*6)*s;oc.strokeStyle='rgba(220,240,255,'+(0.3+z*0.4)+')';oc.lineWidth=1*s;oc.beginPath();oc.arc(d.x*w,d.y*hh,r,0,7);oc.stroke();oc.fillStyle='rgba(255,255,255,0.5)';oc.beginPath();oc.arc(d.x*w-r*0.35,d.y*hh-r*0.35,r*0.22,0,7);oc.fill();if(d.y<-0.05)d.y=1.05;}
+  else if(k==='motes'){d.x+=dt*Math.sin(G.t*0.2+d.ph)*0.006;d.y+=dt*Math.cos(G.t*0.17+d.ph)*0.006;oc.fillStyle='rgba(255,246,220,'+(0.15+0.25*(0.5+0.5*Math.sin(G.t+d.ph)))+')';oc.beginPath();oc.arc(d.x*w,d.y*hh,(0.8+z*1.4)*s,0,7);oc.fill();}
+  if(d.y>1.05){d.y=-0.05;d.x=Math.random();d.b=0;d.v=0;}if(d.x>1.05)d.x=-0.05;if(d.x<-0.05)d.x=1.05;});
+ oc.restore();};
+const sp0=stopPlay;stopPlay=function(){W.kind=null;W.drops=[];W.aurora=0;W.rainbow=0;W.bolts=[];W.cycle=0;W.hurt=0;W.wind=0;SHOTS.length=0;return sp0.apply(this,arguments);};
+
+/* ======================= game rules ======================= */
+const R=()=>G.bxRules||(G.bxRules={});
+const GR=(name,help,ex,f)=>ADD('Rules',name,help,ex,(c,a)=>{if(G)f(R(),a,c);});
+GR('lives','everyone gets this many lives, then it\'s game over','#lives = 3',(r,a)=>{r.lives=Math.max(1,Math.round(nm(a,3)));G.humans.forEach(h=>{if(h.kind!=='bot')h.lives=r.lives;});});
+GR('add_life','gives the player one more life','#add_life',(r)=>{const p=G.player;p.lives=(p.lives==null?(r.lives||1):p.lives)+1;toastMsg('Lives: '+p.lives);});
+GR('time_limit','the player loses when the time runs out','#time_limit = 60s',(r,a)=>{r.limit=TT(a)||60;r.limitT=r.limit;});
+GR('survive_to_win','the player wins by staying alive this long','#survive_to_win = 90s',(r,a)=>{r.survive=TT(a)||60;r.surviveT=r.survive;});
+GR('collect_all_to_win','win when every coin part is collected','#collect_all_to_win',(r)=>{r.collectAll=1;r.coinsAtStart=coinParts().length;});
+GR('defeat_all_bots_to_win','win when every bot has been defeated','#defeat_all_bots_to_win',(r)=>{r.allBots=1;});
+GR('score_to_win','win when the score reaches this','#score_to_win = 100',(r,a)=>{r.scoreWin=nm(a,100);});
+GR('reach_height_to_win','win when the player climbs this high','#reach_height_to_win = 200',(r,a)=>{r.heightWin=nm(a,200);});
+GR('win_message','the big message shown when you win','#win_message = You escaped!',(r,a)=>{r.winMsg=String(a||'YOU WIN!');});
+GR('lose_message','the big message shown when you lose','#lose_message = Caught!',(r,a)=>{r.loseMsg=String(a||'GAME OVER');});
+GR('restart_after','restarts the game this long after it ends','#restart_after = 5s',(r,a)=>{r.restartAfter=TT(a)||5;});
+GR('pause_game','freezes everything in the game','#pause_game',(r)=>{if(G.ts>0)r.prevTs=G.ts;G.ts=0;});
+GR('resume_game','unfreezes the game','#resume_game',(r)=>{G.ts=r.prevTs||1;});
+GR('difficulty','easy, normal, hard or insane: changes how hard bots hit','#difficulty = hard',(r,a)=>{r.botDmg={easy:0.5,normal:1,hard:1.6,insane:2.5}[key(a)]??1;toastMsg('Difficulty: '+key(a||'normal'));});
+GR('damage_multiplier','all damage is multiplied by this','#damage_multiplier = 2',(r,a)=>{r.dmgMul=nm(a,1);});
+GR('coin_multiplier','coins picked up are multiplied by this','#coin_multiplier = 2',(r,a)=>{r.coinMul=nm(a,1);});
+GR('kill_reward','coins for defeating a bot','#kill_reward = 10',(r,a)=>{r.killReward=nm(a,10);});
+GR('death_penalty','coins lost when the player dies','#death_penalty = 5',(r,a)=>{r.deathPenalty=nm(a,5);});
+GR('friendly_bots','bots can\'t hurt each other','#friendly_bots',(r)=>{r.friendly=1;});
+GR('no_respawn','players stay dead after dying','#no_respawn',(r)=>{r.noRespawn=1;});
+GR('sudden_death','everyone drops to 1 health','#sudden_death',()=>{alive(G.humans).forEach(h=>{h.hp=1;});showTitle('SUDDEN DEATH',2.5);sfx('gong');});
+GR('heal_everyone','everyone goes back to full health','#heal_everyone',()=>{alive(G.humans).forEach(h=>h.hp=h.max);});
+GR('freeze_all_bots','stops every bot from moving','#freeze_all_bots',()=>{G.bots.forEach(h=>h.frozen=1e9);});
+GR('unfreeze_all_bots','lets every bot move again','#unfreeze_all_bots',()=>{G.bots.forEach(h=>h.frozen=0);});
+GR('defeat_all_bots','every bot is defeated at once','#defeat_all_bots',()=>{G.bots.slice().forEach(h=>{G.killer=null;killHumanoid(h);});});
+GR('revive_all_bots','brings every dead bot back','#revive_all_bots',()=>{G.bots.forEach(h=>{if(h.dead){respawnHumanoid(h);}});});
+GR('remove_dead_bots','clears away bots that have died','#remove_dead_bots',()=>{G.bots.filter(h=>h.dead).forEach(h=>{if(h.limbs)h.limbs.forEach(L=>L.alive=false);});G.humans=G.humans.filter(h=>!(h.kind==='bot'&&h.dead));G.bots=G.bots.filter(h=>!h.dead);});
+GR('max_bots','never let more than this many bots exist','#max_bots = 20',(r,a)=>{r.maxBots=Math.max(0,Math.round(nm(a,20)));});
+GR('spawn_wave','spawns a wave of bots around the player','#spawn_wave = 5',(r,a)=>{const n=Math.min(30,Math.round(nm(a,5)));for(let i=0;i<n;i++){const ang=i/n*6.28;spawnBot('zombie',add(G.player.pos,[Math.cos(ang)*30,2,Math.sin(ang)*30]));}r.wave=(r.wave||0)+1;G.vars.wave=r.wave;showTitle('Wave '+r.wave,2);});
+GR('waves','sends bigger and bigger waves of bots (seconds between)','#waves = 20s',(r,a)=>{r.waveEvery=Math.max(5,TT(a)||20);r.waveT=1;});
+GR('stop_waves','stops sending waves','#stop_waves',(r)=>{r.waveEvery=0;});
+GR('round_time','each round lasts this long, then the next round starts','#round_time = 60s',(r,a)=>{r.roundLen=Math.max(5,TT(a)||60);r.roundT=r.roundLen;r.round=r.round||1;G.vars.round=r.round;});
+GR('next_round','starts the next round now','#next_round',(r)=>{r.round=(r.round||1)+1;G.vars.round=r.round;r.roundT=r.roundLen||0;showTitle('Round '+r.round,2);sfx('gong');fireAll('on_signal','round');});
+GR('rounds_to_win','win after getting through this many rounds','#rounds_to_win = 5',(r,a)=>{r.roundsWin=Math.round(nm(a,5));});
+GR('king_of_hill_to_win','win after standing on hill parts for this long in total','#king_of_hill_to_win = 30s',(r,a)=>{r.hillWin=TT(a)||30;});
+GR('tag_game','starts tag: a random bot is "it"','#tag_game',()=>{const B=alive(G.bots);G.bxIt=B.length?pick(B):G.player;toastMsg((G.bxIt.name||'Someone')+' is it!');});
+GR('save_value','saves a variable on this device so it stays next time','#save_value = best',(r,a)=>{const k=key(a);try{localStorage.setItem('bx_save_'+k,JSON.stringify(G.vars[k]));}catch(e){}});
+GR('load_value','loads a saved variable back','#load_value = best',(r,a)=>{const k=key(a);try{const v=localStorage.getItem('bx_save_'+k);if(v!=null)G.vars[k]=JSON.parse(v);}catch(e){}});
+GR('delete_save','forgets a saved variable','#delete_save = best',(r,a)=>{try{localStorage.removeItem('bx_save_'+key(a));}catch(e){}});
+GR('save_high_score','saves the score if it beats the best one','#save_high_score',()=>{try{const b=+localStorage.getItem('bx_hi')||0;if(G.score>b){localStorage.setItem('bx_hi',G.score);toastMsg('New high score: '+G.score);}G.vars.high_score=Math.max(b,G.score);}catch(e){}});
+GR('load_high_score','puts the saved best score in the high_score variable','#load_high_score',()=>{try{G.vars.high_score=+localStorage.getItem('bx_hi')||0;}catch(e){}});
+GR('save_best_time','saves the timer if it beats the fastest time','#save_best_time',()=>{try{const b=+localStorage.getItem('bx_bt')||1e9;const t=Math.round(G.timer*100)/100;if(t<b){localStorage.setItem('bx_bt',t);toastMsg('New best time: '+t+'s');}G.vars.best_time=Math.min(b,t);}catch(e){}});
+GR('load_best_time','puts the saved fastest time in the best_time variable','#load_best_time',()=>{try{const v=localStorage.getItem('bx_bt');G.vars.best_time=v?+v:0;}catch(e){}});
+GR('stage','sets the stage number and moves the player to the part called Stage N','#stage = 3',(r,a)=>{const n=Math.round(nm(a,1));G.vars.stage=n;const P=findPart('stage'+n)||findPart('stage '+n);if(P){G.player.pos=add(P.st.Position,[0,P.st.Size[1]/2+0.5,0]);G.player.vel=[0,0,0];G.player.checkpoint=G.player.pos.slice();}});
+GR('next_stage','goes up one stage','#next_stage',(r)=>{CMDS.stage.fn({},String((G.vars.stage||1)+1));});
+GR('previous_stage','goes back one stage','#previous_stage',(r)=>{CMDS.stage.fn({},String(Math.max(1,(G.vars.stage||1)-1)));});
+GR('team_points','gives a team points','#team_points = Red : 10',(r,a)=>{const [t,v]=kva(a);r.tp=r.tp||{};r.tp[t]=(r.tp[t]||0)+nm(v,1);G.vars['team_'+t]=r.tp[t];if(r.teamWin&&r.tp[t]>=r.teamWin){showTitle(t.toUpperCase()+' TEAM WINS',4);sfx('win');fireAll('on_win');}});
+GR('team_points_to_win','a team wins when it gets this many points','#team_points_to_win = 50',(r,a)=>{r.teamWin=nm(a,50);});
+GR('shuffle_teams','puts everyone on random teams','#shuffle_teams = Red, Blue',(r,a)=>{const T=String(a||'Red, Blue').split(',').map(s=>s.trim()).filter(Boolean);const H=G.humans.slice().sort(()=>Math.random()-0.5);H.forEach((h,i)=>h.team=T[i%T.length]);});
+GR('countdown_to_start','counts down and freezes players until it reaches zero','#countdown_to_start = 3',(r,a)=>{const n=Math.max(1,Math.round(nm(a,3)));G.countdown=n+0.01;G.humans.forEach(h=>h.frozen=Math.max(h.frozen||0,n));});
+GR('respawn_bots_after','dead bots come back after this long','#respawn_bots_after = 10s',(r,a)=>{r.botBack=TT(a)||10;});
+GR('max_coins','the player can\'t hold more coins than this','#max_coins = 999',(r,a)=>{r.maxCoins=nm(a,999);});
+GR('starting_coins','the player starts with this many coins','#starting_coins = 50',(r,a)=>{G.player.stats.coins=nm(a,50);});
+GR('slow_mo_on_win','the game slows down when you win','#slow_mo_on_win',(r)=>{r.slowWin=1;});
+GR('hide_bot_names','hides the names above bots','#hide_bot_names',()=>{G.bots.forEach(h=>{h.bxName=h.name;h.name='';});});
+GR('show_bot_names','shows the names above bots again','#show_bot_names',()=>{G.bots.forEach(h=>{if(h.bxName!=null)h.name=h.bxName;});});
+function coinParts(){return G.parts.filter(P=>P.alive&&P.f&&(P.f.touch||[]).some(T=>T.n==='coin'||T.n==='coins'));}
+let hillTime=0;
+function bxGame(dt){const r=G.bxRules;if(!r)return;const p=G.player;const end=(win)=>{if(r.over)return;r.over=1;if(win){if(!G.won){G.won=true;showTitle(r.winMsg||'YOU WIN!',4);sfx('win');fireAll('on_win');if(r.slowWin)G.ts=0.3;}}else{showTitle(r.loseMsg||'GAME OVER',4);sfx('gameover');fireAll('on_lose');}if(r.restartAfter)later(r.restartAfter,()=>{try{CMDS.restart&&CMDS.restart.fn({},'');}catch(e){}});};
+ if(r.limit){r.limitT-=dt;G.vars.time_left=Math.max(0,Math.ceil(r.limitT));if(r.limitT<=0){r.limit=0;end(false);}}
+ if(r.survive&&!p.dead){r.surviveT-=dt;G.vars.survive_left=Math.max(0,Math.ceil(r.surviveT));if(r.surviveT<=0){r.survive=0;end(true);}}
+ if(r.collectAll&&r.coinsAtStart&&coinParts().length===0)end(true);
+ if(r.allBots&&G.bots.length&&G.bots.every(h=>h.dead))end(true);
+ if(r.scoreWin&&G.score>=r.scoreWin)end(true);
+ if(r.heightWin&&p.pos[1]>=r.heightWin)end(true);
+ if(r.maxBots!=null&&G.bots.length>r.maxBots){const extra=G.bots.slice(r.maxBots);extra.forEach(h=>{h.dead=1;if(h.limbs)h.limbs.forEach(L=>L.alive=false);});G.bots=G.bots.slice(0,r.maxBots);G.humans=G.humans.filter(h=>h.kind!=='bot'||G.bots.includes(h));}
+ if(r.waveEvery){r.waveT-=dt;if(r.waveT<=0){r.waveT=r.waveEvery;CMDS.spawn_wave.fn({},String(2+(r.wave||0)*2));}}
+ if(r.roundLen){r.roundT-=dt;G.vars.round_time_left=Math.max(0,Math.ceil(r.roundT));if(r.roundT<=0){if(r.roundsWin&&(r.round||1)>=r.roundsWin){r.roundLen=0;end(true);}else CMDS.next_round.fn({},'');}}
+ if(r.hillWin){G.vars.hill_time=Math.floor(hillTime);if(hillTime>=r.hillWin)end(true);}
+ if(r.botBack){G.bots.forEach(h=>{if(h.dead){h.bxDeadT=(h.bxDeadT||0)+dt;if(h.bxDeadT>=r.botBack){h.bxDeadT=0;respawnHumanoid(h);}}});}
+ if(r.maxCoins!=null&&p.stats.coins>r.maxCoins)p.stats.coins=r.maxCoins;
+ if(r.coinMul&&r.coinMul!==1){const c=p.stats.coins||0;if(r.lastC!=null&&c>r.lastC)p.stats.coins=r.lastC+(c-r.lastC)*r.coinMul;r.lastC=p.stats.coins;}}
+
+/* ======================= zones (part code) ======================= */
+const ZN=(name,help,ex,f)=>ADD('Zones',name,help,ex,(c,a)=>{if(c&&c.P&&c.P.kind==='part'){c.P.bxz=c.P.bxz||{};f(c.P.bxz,a,c.P);}});
+ZN('hill','standing on it counts toward king of the hill (and gives points)','#hill = 1',(z,a)=>{z.hill=nm(a,1);});
+ZN('capture_point','stand on it for a few seconds to take it for your team','#capture_point = 3s',(z,a)=>{z.cap=TT(a)||3;z.capT=0;});
+ZN('points_zone','gives score every second while you stand on it','#points_zone = 5',(z,a)=>{z.pts=nm(a,5);});
+ZN('coin_zone','gives coins every second while you stand on it','#coin_zone = 1',(z,a)=>{z.coins=nm(a,1);});
+ZN('safe_zone','nothing can hurt you while you stand on it','#safe_zone',(z)=>{z.safe=1;});
+ZN('no_jump_zone','you can\'t jump while standing on it','#no_jump_zone',(z)=>{z.nojump=1;});
+ZN('slippery_zone','you keep sliding on it','#slippery_zone',(z)=>{z.slip=1;});
+ZN('quicksand','you slowly sink into it; jump to get out','#quicksand',(z,a,P)=>{z.qs=1;P.collide=false;P.f.nocollideForce=true;});
+ZN('treadmill','pushes you backwards along its length','#treadmill = 20',(z,a)=>{z.tm=nm(a,20);});
+ZN('jump_boost_zone','you jump extra high while on it','#jump_boost_zone = 2',(z,a)=>{z.jb=nm(a,2);});
+ZN('timer_start_zone','touching it starts the timer from zero','#timer_start_zone',(z)=>{z.tstart=1;});
+ZN('timer_stop_zone','touching it stops the timer','#timer_stop_zone',(z)=>{z.tstop=1;});
+ZN('crumble','falls away a moment after someone stands on it','#crumble = 1s',(z,a)=>{z.crumble=TT(a)||1;});
+ZN('elevator','carries you up while you stand on it','#elevator = 15',(z,a)=>{z.lift=nm(a,15);});
+ZN('magnet_floor','holds you down so you can\'t jump high','#magnet_floor',(z)=>{z.mag=1;});
+ZN('spin_floor','turns you around while you stand on it','#spin_floor = 90',(z,a)=>{z.spinYaw=nm(a,90);});
+function bxZones(dt){const Z=G.parts.filter(P=>P.alive&&P.bxz);if(!Z.length)return;let onHill=false;
+ Z.forEach(P=>{if(!P.bxz.qs)return;const st=P.st,top=st.Position[1]+st.Size[1]/2;G.humans.forEach(h=>{if(h.dead)return;const dx=Math.abs(h.pos[0]-st.Position[0])<st.Size[0]/2,dz=Math.abs(h.pos[2]-st.Position[2])<st.Size[2]/2;if(!dx||!dz)return;const y=h.pos[1];if(y>top+0.3||y<top-st.Size[1]-3)return;
+  const floor=Math.max(top-4.5*h.size,(h.bxQs==null||y>top-0.05)?top:h.bxQs);h.bxQs=Math.max(top-4.5*h.size,floor-dt*0.9);if(h.input&&h.input.jump&&h.vel[1]<=0){h.vel[1]=h.jp*0.55;h.bxQs=null;return;}if(h.vel[1]<=0&&y<=floor+0.05){h.pos[1]=h.bxQs;h.vel[0]*=0.85;h.vel[2]*=0.85;h.vel[1]=0;h.ground=true;}if(h.bxQs<=top-4.4*h.size)hurtHumanoid(h,10*dt);});});
+ Z.forEach(P=>{const z=P.bxz;const on=G.humans.filter(h=>!h.dead&&h.touchingParts&&h.touchingParts.has(P));
+  if(z.crumble&&on.length&&z.crT==null){z.crT=z.crumble;}if(z.crT!=null){z.crT-=dt;P.shakeT=0.1;if(z.crT<=0){P.alive=false;later(5,()=>{P.alive=true;z.crT=null;});}}
+  if(z.cap&&on.length){const t=on[0].team||(on[0].kind==='bot'?'bots':'player');if(z.owner!==t){z.capT+=dt;if(z.capT>=z.cap){z.owner=t;z.capT=0;P.st.Color=on[0].team?COLOR_HEX(colorArg(on[0].team)):(on[0].kind==='bot'?'#d84a4a':'#5b6cff');toastMsg(String(t)+' took '+P.o.name);sfx('powerup');}}}else if(z.cap)z.capT=0;
+  on.forEach(h=>{const me=h.kind!=='bot';
+   if(z.hill&&me){onHill=true;G.score+=z.hill*dt;}
+   if(z.pts&&me)G.score+=z.pts*dt;if(z.coins&&me){h.bxCz=(h.bxCz||0)+z.coins*dt;if(h.bxCz>=1){const n=Math.floor(h.bxCz);h.bxCz-=n;h.stats.coins=(h.stats.coins||0)+n;}}
+   if(z.safe){h.ff=Math.max(h.ff||0,0.1);}
+   if(z.nojump&&h.input)h.input.jump=false;
+   if(z.slip){h.vel[0]*=1.0+dt*1.5;h.vel[2]*=1.0+dt*1.5;}
+   if(z.tm){const R2=eulerR(P.st.Orientation||[0,0,0]);const ax=P.st.Size[0]>=P.st.Size[2]?[R2[0][0],R2[1][0],R2[2][0]]:[R2[0][2],R2[1][2],R2[2][2]];h.pos=add(h.pos,mul(ax,-z.tm*dt));}
+   if(z.jb&&h.input&&h.input.jump&&h.ground){h.vel[1]=h.jp*z.jb;h.ground=false;}
+   if(z.tstart&&me){G.timer=0;G.timerRun=true;}if(z.tstop&&me){G.timerRun=false;}
+   if(z.lift){h.vel[1]=Math.max(h.vel[1],z.lift);}
+   if(z.mag&&h.vel[1]>10)h.vel[1]=10;
+   if(z.spinYaw)h.yaw+=z.spinYaw*dt;});});
+ if(onHill)hillTime+=dt;}
+
+/* ======================= inventory ======================= */
+const IV=(name,help,ex,fn)=>ADD('Items',name,help,ex,null,{hum:fn,tg:true,touch:true});
+const inv=h=>h.bxInv||(h.bxInv={});
+const addItem=(h,n,k)=>{const I=inv(h);const lim=h.bxInvMax||1e9;const tot=Object.values(I).reduce((s,v)=>s+v,0);const take=Math.max(0,Math.min(k,lim-tot));if(take<=0){if(h===G.player)toastMsg('Your bag is full');return 0;}I[n]=(I[n]||0)+take;h.items[n]=1;if(h===G.player)G.vars['item_'+n.replace(/\s+/g,'_')]=I[n];return take;};
+const remItem=(h,n,k)=>{const I=inv(h);const had=I[n]||0;const r=Math.min(had,k);I[n]=had-r;if(I[n]<=0){delete I[n];delete h.items[n];}if(h===G.player)G.vars['item_'+n.replace(/\s+/g,'_')]=I[n]||0;return r;};
+const itm=a=>{const [n,k]=String(a||'').split(':');return [key(n),k==null?1:Math.max(0,Math.round(nm(k,1)))];};
+IV('add_item','adds some of an item to their bag','#add_item = toucher : apple : 3',(c,h,a)=>{const [n,k]=itm(a);if(n)addItem(h,n,k);});
+IV('remove_item','takes some of an item out of their bag','#remove_item = toucher : apple : 1',(c,h,a)=>{const [n,k]=itm(a);remItem(h,n,k);});
+IV('clear_bag','empties their whole bag','#clear_bag = toucher',(c,h)=>{h.bxInv={};h.items={};});
+IV('bag_size','the most items their bag can hold','#bag_size = toucher : 10',(c,h,a)=>{h.bxInvMax=Math.max(1,Math.round(nm(a,10)));});
+IV('use_item','uses up one item and sends the signal use_<item>','#use_item = toucher : potion',(c,h,a)=>{const [n]=itm(a);if(remItem(h,n,1)){fireAll('on_signal','use_'+n.replace(/\s+/g,'_'),h);sfx('pop');}else if(h===G.player)toastMsg('No '+n+' left');});
+IV('drop_item','drops one item on the ground for someone to pick up','#drop_item = toucher : apple',(c,h,a)=>{const [n]=itm(a);if(remItem(h,n,1)){const f=[Math.sin(h.yaw*D2R),0,Math.cos(h.yaw*D2R)];dropPickup(add(h.pos,add(mul(f,4),[0,1.2,0])),n,1);}});
+IV('drop_everything','drops every item they carry','#drop_everything = toucher',(c,h)=>{Object.entries(inv(h)).forEach(([n,k],i)=>{const a=i*1.2;for(let j=0;j<Math.min(k,10);j++)dropPickup(add(h.pos,[Math.cos(a+j)*3,1.2,Math.sin(a+j)*3]),n,1);});h.bxInv={};h.items={};});
+IV('buy','buys an item with coins (item : price)','#buy = toucher : sword : 50',(c,h,a)=>{const [n,p]=itm(a);const price=p;if((h.stats.coins||0)>=price){h.stats.coins-=price;addItem(h,n,1);sfx('cash');if(h===G.player)toastMsg('Bought '+n);}else{sfx('error');if(h===G.player)toastMsg('Not enough coins');}});
+IV('sell','sells one item for coins (item : price)','#sell = toucher : gem : 25',(c,h,a)=>{const [n,p]=itm(a);if(remItem(h,n,1)){h.stats.coins=(h.stats.coins||0)+p;sfx('cash');}});
+IV('craft','makes an item from others (result : needed + needed)','#craft = toucher : torch : stick + coal',(c,h,a)=>{const parts=String(a).split(':');const res=key(parts[0]);const need=(parts[1]||'').split('+').map(s=>s.trim().toLowerCase()).filter(Boolean);const cnt={};need.forEach(n=>cnt[n]=(cnt[n]||0)+1);
+ if(Object.entries(cnt).every(([n,k])=>(inv(h)[n]||0)>=k)){Object.entries(cnt).forEach(([n,k])=>remItem(h,n,k));addItem(h,res,1);sfx('powerup');if(h===G.player)toastMsg('Made '+res);}else{sfx('error');if(h===G.player)toastMsg('Missing: '+Object.entries(cnt).filter(([n,k])=>(inv(h)[n]||0)<k).map(([n])=>n).join(', '));}});
+IV('trade','swaps one item for another (give : get)','#trade = toucher : fish : bread',(c,h,a)=>{const [g,t]=String(a).split(':').map(key);if(remItem(h,g,1)){addItem(h,t,1);sfx('ding');}else if(h===G.player)toastMsg('You need '+g);});
+IV('equip','holds an item in hand (it must be in the bag)','#equip = toucher : torch',(c,h,a)=>{const [n]=itm(a);if(inv(h)[n]){h.bxHeld=n;if(h===G.player){toastMsg('Holding '+n);G.vars.held_item=n;}}});
+IV('unequip','puts away whatever they are holding','#unequip = toucher',(c,h)=>{h.bxHeld=null;if(h===G.player)G.vars.held_item='';});
+IV('show_bag','shows what is in their bag','#show_bag = toucher',(c,h)=>{const I=inv(h);const s=Object.entries(I).map(([n,k])=>k+'× '+n).join(', ')||'empty';if(h===G.player)toastMsg('Bag: '+s);else say(h,s,3);});
+IV('count_item','puts how many of an item they have into a variable (var : item)','#count_item = toucher : n : apple',(c,h,a)=>{const [v,n]=String(a).split(':').map(key);G.vars[v]=inv(h)[n]||0;});
+IV('has_item','puts 1 in a variable if they have the item, else 0 (var : item)','#has_item = toucher : ok : key',(c,h,a)=>{const [v,n]=String(a).split(':').map(key);G.vars[v]=(inv(h)[n]||h.items[n])?1:0;});
+IV('give_item_to','gives one of their items to someone else (item : who)','#give_item_to = toucher : apple : Gary',(c,h,a)=>{const [n,w]=String(a).split(':').map(key);const o=one(w,c);if(o&&remItem(h,n,1))addItem(o,n,1);});
+IV('steal_item','takes a random item from their bag','#steal_item = toucher',(c,h)=>{const ks=Object.keys(inv(h));if(!ks.length)return;const n=pick(ks);remItem(h,n,1);if(c&&c.P&&c.P.kind==='bot')addItem(c.P.h,n,1);if(h===G.player)toastMsg('Someone took your '+n+'!');});
+IV('pickup_range','how far away they grab dropped items from','#pickup_range = toucher : 10',(c,h,a)=>{h.bxReach=Math.max(1,nm(a,4));});
+IV('auto_eat','eats food items from the bag when health gets low','#auto_eat = toucher',(c,h)=>{h.bxAutoEat=1;});
+IV('item_heals','sets how much health an item gives when used (item : amount)','#item_heals = toucher : apple : 20',(c,h,a)=>{const [n,k]=String(a).split(':');(G.bxFood=G.bxFood||{})[key(n)]=nm(k,20);});
+const DROPS=[];
+function dropPickup(p,n,k){const col={coin:'#f5c542',gem:'#4fd0ff',key:'#e8c040',apple:'#d43a2a',potion:'#b05ae0'}[n]||'#d9d2c3';const P=spawnNow({Shape:n==='coin'?'Cylinder':'Block',Size:n==='coin'?[1.6,0.35,1.6]:[1.1,1.1,1.1],Color:col,Material:n==='coin'?'Metal':'SmoothPlastic',Position:p,Anchored:true,CanCollide:false,Name:'Drop_'+n});P.bxDrop={n,k,t:0,y:p[1]};DROPS.push(P);}
+function bxPickups(dt){for(let i=DROPS.length-1;i>=0;i--){const P=DROPS[i];if(!P.alive){DROPS.splice(i,1);continue;}const d=P.bxDrop;d.t+=dt;P.st.Position[1]=d.y+Math.sin(d.t*3)*0.3;P.st.Orientation=[0,d.t*90,0];if(d.t<0.6)continue;
+  for(const h of G.humans){if(h.dead||h.kind==='bot')continue;if(len(sub(add(h.pos,[0,1.5,0]),P.st.Position))<(h.bxReach||3.5)){if(d.n==='coin'){h.stats.coins=(h.stats.coins||0)+d.k;sfx('coin');}else{if(!addItem(h,d.n,d.k))continue;sfx('pop');}P.alive=false;DROPS.splice(i,1);break;}}}
+ G.humans.forEach(h=>{if(h.bxAutoEat&&!h.dead&&h.hp<h.max*0.35){const F=G.bxFood||{apple:20,bread:30,potion:50};const n=Object.keys(inv(h)).find(k=>F[k]);if(n){remItem(h,n,1);h.hp=Math.min(h.max,h.hp+F[n]);sfx('powerup');}}});}
+
+/* ======================= info: read things into variables ======================= */
+const IN=(name,help,f)=>ADD('Info',name,help,'#'+name+' = myvar',(c,a)=>{const [v,r]=kva(a);if(G&&v)G.vars[v]=f(r,c);});
+const pl=()=>G.player;
+IN('get_hour','the hour on this device right now (0-23)',()=>new Date().getHours());
+IN('get_minute','the minute right now',()=>new Date().getMinutes());
+IN('get_second','the second right now',()=>new Date().getSeconds());
+IN('get_day','the day of the month today',()=>new Date().getDate());
+IN('get_month','the month number (1-12)',()=>new Date().getMonth()+1);
+IN('get_year','the year',()=>new Date().getFullYear());
+IN('get_weekday','the name of the day, like Monday',()=>['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()]);
+IN('get_month_name','the name of the month, like March',()=>['January','February','March','April','May','June','July','August','September','October','November','December'][new Date().getMonth()]);
+IN('get_date','today\'s date written out',()=>new Date().toLocaleDateString());
+IN('get_clock','the time as hh:mm',()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');});
+IN('get_timestamp','seconds since 1970 (good for timing)',()=>Math.floor(Date.now()/1000));
+IN('get_game_time','seconds since the game started',()=>Math.round(G.t*100)/100);
+IN('get_world_time','the in-game clock time (0-24)',()=>Math.round(S.lighting.ClockTime*100)/100);
+IN('get_gravity','the world\'s gravity now',()=>G.gravity);
+IN('get_time_scale','how fast the game is running (1 = normal)',()=>G.ts);
+IN('get_fps','frames per second right now',()=>{const n=performance.now();const r=window.__bxFps;return r?r:60;});
+IN('get_screen_width','screen width in pixels',()=>innerWidth);
+IN('get_screen_height','screen height in pixels',()=>innerHeight);
+IN('is_phone','1 on a phone or tablet, 0 on a computer',()=>(document.body.classList.contains('mob')||matchMedia('(pointer:coarse)').matches)?1:0);
+IN('is_landscape','1 when the screen is sideways',()=>innerWidth>innerHeight?1:0);
+IN('get_bots_alive','how many bots are alive',()=>alive(G.bots).length);
+IN('get_bots_total','how many bots exist',()=>G.bots.length);
+IN('get_parts_count','how many parts are in the world',()=>G.parts.filter(P=>P.alive).length);
+IN('count_parts_named','how many parts have that name in them (var : name)',(r)=>{const n=nrmName(r);return G.parts.filter(P=>P.alive&&nrmName(P.o.name).includes(n)).length;});
+IN('get_coins_left','how many coin parts are still out there',()=>coinParts().length);
+IN('get_player_speed','how fast the player is moving',()=>Math.round(Math.hypot(pl().vel[0],pl().vel[2])*10)/10);
+IN('get_fall_speed','how fast the player is falling (up is negative)',()=>Math.round(-pl().vel[1]*10)/10);
+IN('get_height_above_ground','how far the player is above the ground below',()=>{const p=pl();const o=add(p.pos,[0,0.2,0]);let best=1e9;solidsNear(o,200).forEach(P=>{const t=rayOBB(o,[0,-1,0],P.obb,400);if(t!=null&&t<best)best=t;});return best>1e8?-1:Math.round(best*10)/10;});
+IN('is_on_ground','1 when the player is standing on something',()=>pl().ground?1:0);
+IN('is_moving','1 when the player is moving',()=>Math.hypot(pl().vel[0],pl().vel[2])>0.5?1:0);
+IN('get_facing','which way the player faces in degrees',()=>Math.round(((pl().yaw%360)+360)%360));
+IN('get_compass','the compass direction the player faces (N, NE, E…)',()=>['N','NE','E','SE','S','SW','W','NW'][Math.round((((pl().yaw%360)+540)%360)/45)%8]);
+IN('get_health_percent','the player\'s health as a percent',()=>Math.round(pl().hp/pl().max*100));
+IN('get_lives','how many lives the player has left',()=>pl().lives==null?(R().lives||0):pl().lives);
+IN('get_held_item','the item the player is holding',()=>pl().bxHeld||'');
+IN('get_bag_count','how many items the player carries in total',()=>Object.values(inv(pl())).reduce((s,v)=>s+v,0));
+IN('get_bag_list','a list of the items in the player\'s bag',()=>Object.keys(inv(pl())));
+IN('get_nearest_bot','the name of the closest bot',()=>{const [o]=nearestHum(pl(),o=>o.kind==='bot');return o?o.name:'';});
+IN('get_nearest_bot_distance','how far the closest bot is',()=>{const [o,d]=nearestHum(pl(),o=>o.kind==='bot');return o?Math.round(d*10)/10:-1;});
+IN('get_nearest_part','the closest part with that name in it (var : name)',(r)=>{const n=nrmName(r);let b=null,bd=1e9;G.parts.forEach(P=>{if(!P.alive||P.isBase||(n&&!nrmName(P.o.name).includes(n)))return;const d=len(sub(P.st.Position,pl().pos));if(d<bd){bd=d;b=P;}});return b?b.o.name:'';});
+IN('get_distance_to','how far the player is from a part or bot (var : name)',(r,c)=>{const t=targets(key(r),c);const q=t&&(t.p&&t.p[0]?t.p[0].st.Position:t.h&&t.h[0]?t.h[0].pos:null);return q?Math.round(len(sub(q,pl().pos))*10)/10:-1;});
+IN('get_distance_between','how far apart two things are (var : A, B)',(r,c)=>{const [A1,B1]=r.split(',').map(s=>{const t=targets(key(s),c);return t&&(t.p&&t.p[0]?t.p[0].st.Position:t.h&&t.h[0]?t.h[0].pos:null);});return A1&&B1?Math.round(len(sub(A1,B1))*10)/10:-1;});
+IN('get_direction_to','the angle in degrees from the player to something (var : name)',(r,c)=>{const t=targets(key(r),c);const q=t&&(t.p&&t.p[0]?t.p[0].st.Position:t.h&&t.h[0]?t.h[0].pos:null);if(!q)return 0;const d=sub(q,pl().pos);return Math.round(((Math.atan2(d[0],d[2])/D2R)+360)%360);});
+IN('get_camera_zoom','how far the camera is from the player',()=>Math.round(cam.dist*10)/10);
+IN('get_camera_angle','which way the camera looks in degrees',()=>Math.round(((cam.yaw/D2R)%360+360)%360));
+IN('get_camera_tilt','how far up or down the camera looks in degrees',()=>Math.round(cam.pitch/D2R));
+IN('get_input_x','left/right input from keys or joystick (-1 to 1)',()=>Math.round(((joy&&joy.x)||0)*100)/100+((G.keys.d?1:0)-(G.keys.a?1:0)));
+IN('get_input_y','forward/back input (-1 to 1)',()=>Math.round(-((joy&&joy.y)||0)*100)/100+((G.keys.w?1:0)-(G.keys.s?1:0)));
+IN('is_key_down','1 while that key is held (var : key)',(r)=>G.keys[key(r)]?1:0);
+IN('get_touching','the name of the part the player stands on or touches',()=>{const P=[...(pl().touchingParts||[])][0];return P?P.o.name:'';});
+IN('get_touching_count','how many parts the player is touching',()=>(pl().touchingParts||new Set()).size);
+IN('get_killer','the name of whoever last hurt the player',()=>G.killer?G.killer.name:'');
+IN('get_it','who is "it" in tag',()=>G.bxIt?G.bxIt.name:'');
+IN('get_round','the round number',()=>R().round||1);
+IN('get_wave','the wave number',()=>R().wave||0);
+IN('get_weather','the current weather name',()=>W.kind||'clear');
+IN('get_team_points','a team\'s points (var : team)',(r)=>((R().tp||{})[key(r)]||0));
+IN('get_hill_time','seconds spent on hill parts',()=>Math.floor(hillTime));
+IN('get_owner','which team owns a capture point (var : part)',(r)=>{const P=findPart(r);return P&&P.bxz&&P.bxz.owner||'';});
+IN('get_part_color','a part\'s color (var : part)',(r)=>{const P=findPart(r);return P?P.st.Color:'';});
+IN('get_part_material','a part\'s material (var : part)',(r)=>{const P=findPart(r);return P?P.st.Material:'';});
+IN('get_part_shape','a part\'s shape (var : part)',(r)=>{const P=findPart(r);return P?P.st.Shape:'';});
+IN('get_part_transparency','how see-through a part is (var : part)',(r)=>{const P=findPart(r);return P?P.st.Transparency:0;});
+IN('get_part_volume','how much space a part takes up (var : part)',(r)=>{const P=findPart(r);return P?Math.round(P.st.Size[0]*P.st.Size[1]*P.st.Size[2]*100)/100:0;});
+IN('get_part_speed','how fast a part is moving (var : part)',(r)=>{const P=findPart(r);const v=P&&(P.vel||P.kv);return v?Math.round(len(v)*10)/10:0;});
+IN('get_part_top','the height of the top of a part (var : part)',(r)=>{const P=findPart(r);return P?Math.round((P.st.Position[1]+P.st.Size[1]/2)*100)/100:0;});
+IN('get_part_rotation','a part\'s turn in degrees (var : part)',(r)=>{const P=findPart(r);return P?Math.round(P.st.Orientation[1]):0;});
+IN('is_part_alive','1 if the part still exists (var : part)',(r)=>{const P=findPart(r);return P&&P.alive?1:0;});
+IN('is_anchored','1 if the part is anchored (var : part)',(r)=>{const P=findPart(r);return P&&!P.dyn?1:0;});
+IN('get_random_bot','the name of a random living bot',()=>{const B=alive(G.bots);return B.length?pick(B).name:'';});
+IN('get_random_part','the name of a random part',()=>{const L=G.parts.filter(P=>P.alive&&!P.isBase);return L.length?pick(L).o.name:'';});
+IN('get_player_name','the player\'s name',()=>pl().name);
+IN('get_language','the device language, like en',()=>(navigator.language||'en').slice(0,2));
+IN('is_dark_mode','1 if the device uses dark mode',()=>matchMedia('(prefers-color-scheme: dark)').matches?1:0);
+IN('get_battery','not every device shares this: battery percent or -1',()=>window.__bxBat==null?-1:window.__bxBat);
+try{navigator.getBattery&&navigator.getBattery().then(b=>{const u=()=>window.__bxBat=Math.round(b.level*100);u();b.onlevelchange=u;});}catch(e){}
+(function fps(){let n=0,t0=performance.now();(function L(){(window.__raf||requestAnimationFrame)(L);n++;const t=performance.now();if(t-t0>500){window.__bxFps=Math.round(n*1000/(t-t0));n=0;t0=t;}})();})();
+const ws0=gameStep;gameStep=function(dt0){ws0.apply(this,arguments);if(G)weatherStep(dt0*G.ts);};
+const sp1=stopPlay;stopPlay=function(){hillTime=0;DROPS.length=0;return sp1.apply(this,arguments);};
+/* hidden bots are not drawn: shrink them to nothing for the frame */
+const r0=render;render=function(){const hid=G?G.bots.filter(h=>h.bxHidden):[];const keep=hid.map(h=>h.size);hid.forEach(h=>h.size=0.0001);try{return r0.apply(this,arguments);}finally{hid.forEach((h,i)=>h.size=keep[i]);}};
+})();
+
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
 function init(){if(!load())defaultPlace();lastSnap=snapState();bind();let dv=null;try{dv=localStorage.getItem('buildx-device');}catch(e){}setDevice(dv||(matchMedia('(pointer:coarse)').matches?'mob':'pc'));if(!dv)$('devpick').style.display='flex';applySettings();refreshToolbox();refreshAll();out('👋 Welcome to BuildX! '+Object.keys(CMDS).length+' commands, '+CATALOG.length+' things to insert. Press ▶ Play to test.');startIcons();requestAnimationFrame(frame);}
 
