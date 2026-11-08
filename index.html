@@ -3369,6 +3369,284 @@ ADD('Lists','table_add','adds a number to a value in a table (good for counting)
 ADD('Lists','table_print','shows a table in the output','#table_print = prices',(c,a)=>{const k=key(a);out(k+' = {'+Object.entries(tab(k)).map(([x,y])=>x+': '+y).join(', ')+'}');});
 })();
 
+/* ================= 13. base command batch 2: player abilities, part motions, building ================= */
+(function(){
+const ADD=(cat,name,help,ex,fn,opt)=>{if(CMDS[name])return false;reg(cat,name,help,ex,fn,opt);return true;};
+const HB=(name,help,ex,fn)=>ADD('Abilities',name,help,ex,null,{hum:fn,tg:true,touch:true});
+const T=a=>parseTime(String(a||'').trim()||'0');
+const tNum=(a,d)=>{const v=parseFloat(String(a||'').replace(/s$/,''));return isFinite(v)?v:d;};
+const fwd=h=>[Math.sin(h.yaw*D2R),0,Math.cos(h.yaw*D2R)];
+const rnd=(a,b)=>a+Math.random()*(b-a);
+/* ---------- per-frame ability handling ---------- */
+const sh0=stepHumanoid;stepHumanoid=function(h,dt){const A=h.ab;if(!A||h.dead){return sh0.apply(this,arguments);}
+ const inp=h.input||{};const jumpEdge=inp.jump&&!A._pj;A._pj=!!inp.jump;
+ /* timers */for(const k in A.t||{}){A.t[k]-=dt;if(A.t[k]<=0){delete A.t[k];if(A.off&&A.off[k]){A.off[k](h);delete A.off[k];}}}
+ if(A.backwards&&!A._flipped){inp.x=-inp.x;inp.y=-inp.y;}
+ if(A.mirror)inp.x=-inp.x;
+ if(A.drunk){const w=Math.sin(G.t*2.3)*0.7;const x=inp.x,y=inp.y;inp.x=x*Math.cos(w)-y*Math.sin(w);inp.y=x*Math.sin(w)+y*Math.cos(w);}
+ if(A.autorun&&Math.hypot(inp.x,inp.y)<0.1){const f=fwd(h);inp.x=f[0];inp.y=f[2];}
+ const wasGround=h.ground;
+ sh0.apply(this,arguments);
+ if(h.ground){A.air=0;A.used=0;}else A.air=(A.air||0)+dt;
+ /* extra jumps in the air */
+ const extra=A.infjump?1e9:(A.jumps||0);if(jumpEdge&&!h.ground&&A.air>0.08&&A.used<extra&&!(h.fly||h.noclip)){h.vel[1]=h.jp*(A.jumpMul||1);A.used++;fireAll('on_jump',null,h);}
+ if(A.glide&&!h.ground&&inp.jump&&h.vel[1]<-8)h.vel[1]=-8;
+ if(A.parachute&&!h.ground&&h.vel[1]<-12)h.vel[1]=-12;
+ if(A.bunny&&h.ground&&!wasGround){h.vel[1]=h.jp;h.ground=false;}
+ if(A.pogo&&h.ground&&(h.jcd||0)<=0){h.vel[1]=h.jp*0.8;h.ground=false;h.jcd=0.2;}
+ if(A.bounce&&h.ground&&!wasGround&&(A.lastVy||0)<-40){h.vel[1]=-A.lastVy*0.7;h.ground=false;}
+ if(A.wallclimb||A.walljump){const f=fwd(h);const o=add(h.pos,[0,2*h.size,0]);let hit=false;solidsNear(o,4).forEach(P=>{if(P.isBase)return;const t=rayOBB(o,f,P.obb,1.6*h.size);if(t!=null)hit=true;});
+  if(hit&&A.wallclimb&&Math.hypot(inp.x,inp.y)>0.3)h.vel[1]=Math.max(h.vel[1],14);
+  if(hit&&A.walljump&&jumpEdge&&!h.ground){h.vel[1]=h.jp;h.vel[0]=-f[0]*40;h.vel[2]=-f[2]*40;h.yaw+=180;}}
+ if(A.pound&&!h.ground&&inp.down&&!A.pounding){A.pounding=1;h.vel=[0,-220,0];}
+ if(A.pounding&&h.ground){A.pounding=0;G.rings.push({p:h.pos.slice(),t:0,col:'#ffffff',r:14});G.shake=Math.max(G.shake||0,0.25);sfx('thunder');
+  G.humans.forEach(o=>{if(o===h||o.dead)return;const d=sub(o.pos,h.pos);const L=len(d);if(L<14){o.vel=add(o.vel,[d[0]/L*50,40,d[2]/L*50]);o.ground=false;}});}
+ if(A.jetpack&&inp.jump&&(A.fuel??3)>0){h.vel[1]=Math.min(h.vel[1]+260*dt,40);A.fuel=(A.fuel??3)-dt;}if(A.jetpack&&h.ground)A.fuel=Math.min(3,(A.fuel??3)+dt*1.5);
+ if(A.hover>0){h.vel[1]=Math.max(h.vel[1],0);if(h.vel[1]<=0)h.vel[1]=0;A.hover-=dt;}
+ if(A.drain){hurtHumanoid(h,A.drain*dt);}if(A.regen){h.hp=Math.min(h.max,h.hp+A.regen*dt);}
+ if(A.grow){h.size=Math.min(6,h.size*(1+A.grow*dt));}if(A.shrinkSlow){h.size=Math.max(0.2,h.size*(1-A.shrinkSlow*dt));}
+ if(A.spin){h.yaw+=A.spin*dt;}
+ if(A.magnet){G.parts.forEach(P=>{if(!P.alive||!(P.f.coin||P.f.gem))return;const d=sub(add(h.pos,[0,2,0]),P.st.Position);const L=len(d);if(L<A.magnet&&L>0.5)P.st.Position=add(P.st.Position,mul(d,Math.min(1,dt*6)));});}
+ if(A.trail){A.tt=(A.tt||0)+dt;if(A.tt>0.04){A.tt=0;G.particles.push({p:add(h.pos,[0,1.5*h.size,0]),v:[0,0,0],t:0,life:0.6,col:A.trail,sz:9*h.size,g:0,kind:'sparkles'});}}
+ if(A.slippery&&h.ground){/* keep sliding */h.vel[0]=h.vel[0]*0.995+(A._vx||0)*0;}
+ if(A.stopdead&&h.ground&&Math.hypot(inp.x,inp.y)<0.05){h.vel[0]=0;h.vel[2]=0;}
+ A.lastVy=h.vel[1];
+ if(A.lowgrav)h.vel[1]+=(G.gravity||196.2)*(1-A.lowgrav)*dt;
+ if(A.floatUp)h.vel[1]=Math.max(h.vel[1],A.floatUp);
+};
+const ab=h=>h.ab||(h.ab={t:{},off:{}});
+const timed=(h,k,secs,on,off)=>{const A=ab(h);on(A,h);A.t[k]=secs;A.off[k]=hh=>off(ab(hh),hh);};
+/* keyboard / button actions for dash and friends */
+addEventListener('keydown',e=>{if(!G||e.repeat)return;if(e.target&&e.target.matches&&e.target.matches('input,textarea'))return;const h=G.player;const A=h&&h.ab;if(!A)return;
+ if((e.key==='e'||e.key==='E')&&A.dash&&!(A.t.dashcd>0)){doDash(h);A.t.dashcd=1;}
+ if((e.key==='r'||e.key==='R')&&A.sprint)A.sprinting=1;});
+addEventListener('keyup',e=>{const h=G&&G.player;if(h&&h.ab&&(e.key==='r'||e.key==='R'))h.ab.sprinting=0;});
+function doDash(h){const f=fwd(h);h.vel=[f[0]*110,Math.max(h.vel[1],12),f[2]*110];h.ground=false;sfx('whoosh');}
+/* sprint: wraps speed while held */
+const gs0=gameStep;gameStep=function(dt0){gs0.apply(this,arguments);if(!G)return;G.humans.forEach(h=>{const A=h.ab;if(!A)return;if(A.sprint){if(A.sprinting&&!A._sp){A._sp=1;h.walk*=1.6;}else if(!A.sprinting&&A._sp){A._sp=0;h.walk/=1.6;}}});
+ /* mobile action button */const btn=document.getElementById('bxAbBtn');const A=G.player&&G.player.ab;const need=A&&(A.dash||A.sprint);
+ if(need&&!btn){const b=document.createElement('button');b.id='bxAbBtn';b.textContent=A.dash?'Dash':'Sprint';b.style.cssText='position:fixed;right:118px;bottom:118px;z-index:30;width:64px;height:64px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(20,22,28,.55);color:#fff;font:700 13px system-ui';
+  b.onpointerdown=e=>{e.stopPropagation();const P=G.player,A2=P.ab;if(A2.dash&&!(A2.t.dashcd>0)){doDash(P);A2.t.dashcd=1;}else if(A2.sprint)A2.sprinting=1;};b.onpointerup=()=>{if(G&&G.player.ab)G.player.ab.sprinting=0;};document.body.appendChild(b);}
+ else if(!need&&btn)btn.remove();};
+const sp0=stopPlay;stopPlay=function(){const b=document.getElementById('bxAbBtn');if(b)b.remove();return sp0.apply(this,arguments);};
+
+/* ---------- Abilities ---------- */
+HB('double_jump','lets them jump once more in the air','#double_jump',(c,h)=>{ab(h).jumps=1;});
+HB('triple_jump','lets them jump twice more in the air','#triple_jump',(c,h)=>{ab(h).jumps=2;});
+HB('air_jumps','sets how many extra jumps they get in the air','#air_jumps = 4',(c,h,a)=>{ab(h).jumps=Math.max(0,Math.floor(tNum(a,1)));});
+HB('infinite_jump','they can keep jumping in the air forever','#infinite_jump',(c,h)=>{ab(h).infjump=1;});
+HB('no_air_jumps','takes away extra air jumps','#no_air_jumps',(c,h)=>{const A=ab(h);A.jumps=0;A.infjump=0;});
+HB('no_jump','they cannot jump at all','#no_jump',(c,h)=>{h.jp0=h.jp0||h.jp;h.jp=0;});
+HB('allow_jump','gives back normal jumping','#allow_jump',(c,h)=>{h.jp=h.jp0||50;});
+HB('glide','hold jump while falling to glide down slowly','#glide',(c,h)=>{ab(h).glide=1;});
+HB('parachute','they always fall slowly','#parachute',(c,h)=>{ab(h).parachute=1;});
+HB('no_parachute','normal falling again','#no_parachute',(c,h)=>{const A=ab(h);A.parachute=0;A.glide=0;});
+HB('feather_fall','gravity is half as strong for them','#feather_fall',(c,h)=>{h.gscale=0.5;});
+HB('heavy_player','gravity is twice as strong for them','#heavy_player',(c,h)=>{h.gscale=2;});
+HB('moon_jump','floaty moon gravity just for them','#moon_jump',(c,h)=>{h.gscale=0.3;});
+HB('normal_weight','normal gravity for them again','#normal_weight',(c,h)=>{h.gscale=1;});
+HB('dash_ability','press E (or the Dash button) to dash forward','#dash_ability',(c,h)=>{ab(h).dash=1;});
+HB('dash','throws them forward right now','#dash',(c,h)=>doDash(h));
+HB('sprint_ability','hold R (or the Sprint button) to run faster','#sprint_ability',(c,h)=>{ab(h).sprint=1;});
+HB('remove_abilities','takes away every ability','#remove_abilities',(c,h)=>{if(h.ab&&h.ab._sp)h.walk/=1.6;h.ab={t:{},off:{}};h.gscale=1;if(h.jp0)h.jp=h.jp0;});
+HB('backwards_controls','forward goes back and left goes right','#backwards_controls',(c,h)=>{ab(h).backwards=1;});
+HB('mirror_controls','left and right are swapped','#mirror_controls',(c,h)=>{ab(h).mirror=1;});
+HB('drunk_walk','they wobble when they walk','#drunk_walk',(c,h)=>{ab(h).drunk=1;});
+HB('normal_controls','fixes backwards, mirrored or wobbly controls','#normal_controls',(c,h)=>{const A=ab(h);A.backwards=A.mirror=A.drunk=A.autorun=0;});
+HB('confuse','backwards controls for a while','#confuse = 5s',(c,h,a)=>timed(h,'confuse',T(a)||5,A=>A.backwards=1,A=>A.backwards=0));
+HB('auto_run','they keep running forward on their own','#auto_run',(c,h)=>{ab(h).autorun=1;});
+HB('stop_auto_run','stops auto run','#stop_auto_run',(c,h)=>{ab(h).autorun=0;});
+HB('bunny_hop','they jump again every time they land','#bunny_hop',(c,h)=>{ab(h).bunny=1;});
+HB('pogo','they bounce up and down all the time, like on a pogo stick','#pogo',(c,h)=>{ab(h).pogo=1;});
+HB('stop_bouncing','stops bunny hop and pogo','#stop_bouncing',(c,h)=>{const A=ab(h);A.bunny=A.pogo=A.bounce=0;});
+HB('bouncy_landing','they bounce back up when they land hard','#bouncy_landing',(c,h)=>{ab(h).bounce=1;});
+HB('wall_jump','jump off walls while in the air','#wall_jump',(c,h)=>{ab(h).walljump=1;});
+HB('wall_climb','walk into a wall to climb it','#wall_climb',(c,h)=>{ab(h).wallclimb=1;});
+HB('ground_pound','in the air, press down (Q or crouch) to slam the ground','#ground_pound',(c,h)=>{ab(h).pound=1;});
+HB('jetpack','hold jump to fly up (fuel refills on the ground)','#jetpack',(c,h)=>{ab(h).jetpack=1;});
+HB('hover_player','they hang in the air for a while','#hover_player = 3s',(c,h,a)=>{ab(h).hover=T(a)||3;});
+HB('blink_forward','teleports them a short way forward','#blink_forward = 15',(c,h,a)=>{const f=fwd(h),d=tNum(a,15);h.pos=add(h.pos,mul(f,d));sfx('swoosh');});
+HB('random_teleport','teleports them to a random spot nearby','#random_teleport = 50',(c,h,a)=>{const r=tNum(a,50);h.pos=add(h.pos,[rnd(-r,r),2,rnd(-r,r)]);h.vel=[0,0,0];});
+HB('launch_up','throws them straight up','#launch_up = 120',(c,h,a)=>{h.vel[1]=tNum(a,120);h.ground=false;});
+HB('rocket_boost','blasts them forward and up','#rocket_boost',(c,h)=>{const f=fwd(h);h.vel=[f[0]*90,90,f[2]*90];h.ground=false;sfx('explosion');});
+HB('knockback','pushes them away from this part','#knockback = 60',(c,h,a)=>{const d=sub(h.pos,ownerPos(c));d[1]=0;const L=len(d)||1;h.vel=add(h.vel,[d[0]/L*tNum(a,60),25,d[2]/L*tNum(a,60)]);h.ground=false;});
+HB('pull_in','pulls them toward this part','#pull_in = 60',(c,h,a)=>{const d=sub(ownerPos(c),h.pos);d[1]=0;const L=len(d)||1;h.vel=add(h.vel,[d[0]/L*tNum(a,60),10,d[2]/L*tNum(a,60)]);h.ground=false;});
+HB('stop_moving_player','stops them dead (no speed left)','#stop_moving_player',(c,h)=>{h.vel=[0,0,0];});
+HB('spin_player','spins them round and round','#spin_player = 360',(c,h,a)=>{ab(h).spin=tNum(a,360);});
+HB('stop_spin_player','stops spinning them','#stop_spin_player',(c,h)=>{ab(h).spin=0;});
+HB('turn_around','turns them to face the other way','#turn_around',(c,h)=>{h.yaw+=180;});
+HB('face_part','turns them to look at this part','#face_part',(c,h)=>{const d=sub(ownerPos(c),h.pos);h.yaw=Math.atan2(d[0],d[2])/D2R;});
+HB('face_away','turns them to look away from this part','#face_away',(c,h)=>{const d=sub(h.pos,ownerPos(c));h.yaw=Math.atan2(d[0],d[2])/D2R;});
+HB('grow_slowly','they keep getting bigger','#grow_slowly',(c,h)=>{const A=ab(h);A.grow=0.15;A.shrinkSlow=0;});
+HB('shrink_slowly','they keep getting smaller','#shrink_slowly',(c,h)=>{const A=ab(h);A.shrinkSlow=0.15;A.grow=0;});
+HB('stop_growing','stops growing or shrinking','#stop_growing',(c,h)=>{const A=ab(h);A.grow=A.shrinkSlow=0;});
+HB('random_size','gives them a random size','#random_size',(c,h)=>{h.size=rnd(0.4,2.5);});
+HB('set_size','sets their size exactly (1 is normal)','#set_size = 1.5',(c,h,a)=>{h.size=Math.max(0.1,Math.min(10,tNum(a,1)));});
+HB('drain','they lose health every second','#drain = 5',(c,h,a)=>{ab(h).drain=tNum(a,5);});
+HB('stop_drain','stops the health drain','#stop_drain',(c,h)=>{ab(h).drain=0;});
+HB('fast_regen','they heal quickly all the time','#fast_regen = 10',(c,h,a)=>{ab(h).regen=tNum(a,10);});
+HB('stop_regen','stops healing over time','#stop_regen',(c,h)=>{ab(h).regen=0;});
+HB('invincible_for','nothing can hurt them for a while','#invincible_for = 5s',(c,h,a)=>{h.ff=T(a)||5;});
+HB('stun','they freeze and wobble for a moment','#stun = 1s',(c,h,a)=>{h.frozen=T(a)||1;if(h.kind==='player')G.shake=Math.max(G.shake||0,0.3);});
+HB('fly_for','they can fly for a while','#fly_for = 5s',(c,h,a)=>timed(h,'fly',T(a)||5,(A,hh)=>hh.fly=1,(A,hh)=>hh.fly=0));
+HB('ghost_for','they walk through walls for a while','#ghost_for = 3s',(c,h,a)=>{h.ghost=T(a)||3;});
+HB('speed_for','they run twice as fast for a while','#speed_for = 5s',(c,h,a)=>{h.fastT=T(a)||5;});
+HB('slow_for','they walk slowly for a while','#slow_for = 5s',(c,h,a)=>{h.slowT=T(a)||5;});
+HB('big_jump_for','they jump much higher for a while','#big_jump_for = 5s',(c,h,a)=>timed(h,'bigjump',T(a)||5,(A,hh)=>{hh.jpB=hh.jp;hh.jp*=2;},(A,hh)=>{hh.jp=hh.jpB||50;}));
+HB('tiny_for','they shrink for a while','#tiny_for = 5s',(c,h,a)=>timed(h,'tiny',T(a)||5,(A,hh)=>{hh.sizeB=hh.size;hh.size=0.5;},(A,hh)=>{hh.size=hh.sizeB||1;}));
+HB('giant_for','they grow huge for a while','#giant_for = 5s',(c,h,a)=>timed(h,'giant',T(a)||5,(A,hh)=>{hh.sizeB=hh.size;hh.size=2.5;},(A,hh)=>{hh.size=hh.sizeB||1;}));
+HB('invisible_for','they turn invisible for a while','#invisible_for = 5s',(c,h,a)=>timed(h,'invis',T(a)||5,(A,hh)=>hh.invis=1,(A,hh)=>hh.invis=0));
+HB('coin_magnet','coins and gems fly to them','#coin_magnet = 25',(c,h,a)=>{ab(h).magnet=tNum(a,25);});
+HB('sparkle_trail','leaves a trail of sparkles behind them','#sparkle_trail',(c,h)=>{ab(h).trail='#ffffff';});
+HB('fire_trail','leaves a trail of fire behind them','#fire_trail',(c,h)=>{ab(h).trail='#ff7a1a';});
+HB('rainbow_trail','leaves a rainbow trail behind them','#rainbow_trail',(c,h)=>{ab(h).trail='#ff5ad1';});
+HB('no_trail','stops their trail','#no_trail',(c,h)=>{ab(h).trail=null;});
+HB('stop_on_a_dime','they stop instantly when they let go (no sliding)','#stop_on_a_dime',(c,h)=>{ab(h).stopdead=1;});
+HB('float_up','they slowly float upwards','#float_up = 6',(c,h,a)=>{ab(h).floatUp=tNum(a,6);});
+HB('stop_floating','stops floating up','#stop_floating',(c,h)=>{ab(h).floatUp=0;});
+HB('swap_places','swaps their place with the nearest other player or bot','#swap_places',(c,h)=>{let best=null,bd=1e9;G.humans.forEach(o=>{if(o===h||o.dead)return;const d=len(sub(o.pos,h.pos));if(d<bd){bd=d;best=o;}});if(best){const p=h.pos;h.pos=best.pos.slice();best.pos=p.slice();}});
+HB('bring_to_me','pulls them right next to this part','#bring_to_me',(c,h)=>{h.pos=add(ownerPos(c),[rnd(-3,3),2,rnd(-3,3)]);h.vel=[0,0,0];});
+HB('send_home','sends them back to where they spawned','#send_home',(c,h)=>{h.pos=h.spawn.slice();h.vel=[0,0,0];});
+HB('throw_randomly','flings them in a random direction','#throw_randomly',(c,h)=>{const a=Math.random()*Math.PI*2;h.vel=[Math.cos(a)*80,70,Math.sin(a)*80];h.ground=false;});
+HB('hp_to_full_after','heals them fully after a wait','#hp_to_full_after = 3s',(c,h,a)=>timed(h,'healafter',T(a)||3,()=>{},(A,hh)=>{hh.hp=hh.max;}));
+HB('half_health','cuts their health in half','#half_health',(c,h)=>{h.hp=Math.max(1,h.hp/2);});
+HB('double_max_health','doubles their max health','#double_max_health',(c,h)=>{h.max*=2;h.hp*=2;});
+
+/* ---------- part motions ---------- */
+const PM=(name,help,ex,fn)=>ADD('Motion',name,help,ex,(c,a)=>{if(c.P&&c.P.kind==='part'&&c.P.st)fn(c.P,a,c);},{tg:true});
+const mvAdd=(P,step,tag)=>{P.mvs=(P.mvs||[]).filter(m=>m.tag!==tag);P.mvs.push({step,tag,t:0,p0:P.st.Position.slice(),o0:P.st.Orientation.slice(),s0:P.st.Size.slice()});};
+const gs1=gameStep;gameStep=function(dt0){gs1.apply(this,arguments);if(!G)return;const dt=dt0*(G.ts||1);
+ G.parts.forEach(P=>{if(!P.alive||!P.mvs||!P.mvs.length)return;const before=P.st.Position.slice();P.mvs=P.mvs.filter(m=>{m.t+=dt;return m.step(P,dt,m)!==false;});
+  const d=sub(P.st.Position,before);if(len(d)>0)P.kv=mul(d,1/Math.max(dt,1e-4));if(P.obb&&typeof obbOfSt==='function')P.obb=obbOfSt(P.st);});};
+const P0=(P,m)=>m.p0;
+PM('zigzag','moves left and right while going forward, like a zigzag','#zigzag = 6',(P,a)=>{const w=tNum(a,6);mvAdd(P,(P,dt,m)=>{P.st.Position=add(m.p0,[Math.asin(Math.sin(m.t*2))/(Math.PI/2)*w,0,m.t*4]);},'path');});
+PM('spiral_up','circles round while rising','#spiral_up = 8',(P,a)=>{const r=tNum(a,8);mvAdd(P,(P,dt,m)=>{P.st.Position=add(m.p0,[Math.cos(m.t*2)*r-r,m.t*2,Math.sin(m.t*2)*r]);return m.t<30;},'path');});
+PM('figure_eight','flies in a figure 8','#figure_eight = 10',(P,a)=>{const r=tNum(a,10);mvAdd(P,(P,dt,m)=>{P.st.Position=add(m.p0,[Math.sin(m.t)*r,0,Math.sin(m.t*2)*r/2]);},'path');});
+PM('vertical_circle','goes round in an upright circle, like a Ferris wheel seat','#vertical_circle = 8',(P,a)=>{const r=tNum(a,8);mvAdd(P,(P,dt,m)=>{P.st.Position=add(m.p0,[Math.cos(m.t)*r-r,Math.sin(m.t)*r,0]);},'path');});
+PM('pendulum','swings like a pendulum from its top','#pendulum = 40',(P,a)=>{const A=tNum(a,40);mvAdd(P,(P,dt,m)=>{P.st.Orientation=[m.o0[0],m.o0[1],m.o0[2]+Math.sin(m.t*2.2)*A];},'rot');});
+PM('metronome','ticks side to side like a metronome','#metronome = 30',(P,a)=>{const A=tNum(a,30);mvAdd(P,(P,dt,m)=>{const s=Math.sin(m.t*3);P.st.Orientation=[m.o0[0],m.o0[1],m.o0[2]+Math.sign(s)*Math.pow(Math.abs(s),0.4)*A];},'rot');});
+PM('wave_motion','glides up and down in a smooth wave as it moves sideways','#wave_motion = 3',(P,a)=>{const A=tNum(a,3);mvAdd(P,(P,dt,m)=>{P.st.Position=add(m.p0,[Math.sin(m.t*0.6)*12,Math.sin(m.t*2.4)*A,0]);},'path');});
+PM('sway','sways gently like a tree in the wind','#sway = 6',(P,a)=>{const A=tNum(a,6);mvAdd(P,(P,dt,m)=>{P.st.Orientation=[m.o0[0]+Math.sin(m.t*1.1)*A,m.o0[1],m.o0[2]+Math.sin(m.t*0.8+1)*A*0.6];},'rot');});
+PM('wobble','wobbles like jelly','#wobble',(P)=>{mvAdd(P,(P,dt,m)=>{const k=Math.sin(m.t*9)*0.08;P.st.Size=[m.s0[0]*(1+k),m.s0[1]*(1-k),m.s0[2]*(1+k)];},'size');});
+PM('jitter','shivers in place','#jitter = 0.2',(P,a)=>{const A=tNum(a,0.2);mvAdd(P,(P,dt,m)=>{P.st.Position=add(m.p0,[rnd(-A,A),rnd(-A,A),rnd(-A,A)]);},'path');});
+PM('drift','drifts slowly in a random direction','#drift = 2',(P,a)=>{const s=tNum(a,2),an=Math.random()*Math.PI*2;mvAdd(P,(P,dt)=>{P.st.Position=add(P.st.Position,[Math.cos(an)*s*dt,0,Math.sin(an)*s*dt]);},'path');});
+PM('wander_part','wanders around on its own','#wander_part = 20',(P,a)=>{const r=tNum(a,20);mvAdd(P,(P,dt,m)=>{if(!m.g||len(sub(m.g,P.st.Position))<1)m.g=add(m.p0,[rnd(-r,r),0,rnd(-r,r)]);const d=sub(m.g,P.st.Position);P.st.Position=add(P.st.Position,mul(d,Math.min(1,3*dt/Math.max(1,len(d)))));},'path');});
+PM('hop_part','hops up and down every second','#hop_part = 4',(P,a)=>{const h=tNum(a,4);mvAdd(P,(P,dt,m)=>{const u=m.t%1;P.st.Position=add(m.p0,[0,Math.max(0,Math.sin(u*Math.PI))*h,0]);},'path');});
+PM('bounce_part','bounces like a ball','#bounce_part = 6',(P,a)=>{const h=tNum(a,6);mvAdd(P,(P,dt,m)=>{P.st.Position=add(m.p0,[0,Math.abs(Math.sin(m.t*3))*h,0]);},'path');});
+PM('rise','keeps rising slowly','#rise = 2',(P,a)=>{const s=tNum(a,2);mvAdd(P,(P,dt)=>{P.st.Position=add(P.st.Position,[0,s*dt,0]);},'path');});
+PM('sink_slowly','keeps sinking slowly','#sink_slowly = 1',(P,a)=>{const s=tNum(a,1);mvAdd(P,(P,dt)=>{P.st.Position=add(P.st.Position,[0,-s*dt,0]);},'path');});
+PM('float_away','floats up and fades away','#float_away',(P)=>{mvAdd(P,(P,dt,m)=>{P.st.Position=add(P.st.Position,[0,3*dt,0]);P.st.Transparency=Math.min(1,m.t/4);if(m.t>4){P.alive=false;return false;}},'path');});
+PM('rocket_up','shoots up faster and faster','#rocket_up',(P)=>{mvAdd(P,(P,dt,m)=>{P.st.Position=add(P.st.Position,[0,(4+m.t*m.t*12)*dt,0]);if(m.t>6){P.alive=false;return false;}},'path');});
+PM('roll_forward','rolls forward like a wheel','#roll_forward = 6',(P,a)=>{const s=tNum(a,6);mvAdd(P,(P,dt)=>{P.st.Position=add(P.st.Position,[0,0,s*dt]);const r=Math.max(0.5,P.st.Size[1]/2);P.st.Orientation=add(P.st.Orientation,[s*dt/r/D2R,0,0]);},'path');});
+PM('tumble','tumbles over and over in a random way','#tumble',(P)=>{const w=[rnd(-120,120),rnd(-120,120),rnd(-120,120)];mvAdd(P,(P,dt)=>{P.st.Orientation=add(P.st.Orientation,mul(w,dt));},'rot');});
+PM('spin_up','spins faster and faster','#spin_up',(P)=>{mvAdd(P,(P,dt,m)=>{P.st.Orientation=add(P.st.Orientation,[0,Math.min(1440,60+m.t*120)*dt,0]);},'rot');});
+PM('propeller','spins very fast around its front, like a propeller','#propeller',(P)=>{mvAdd(P,(P,dt)=>{P.st.Orientation=add(P.st.Orientation,[0,0,1080*dt]);},'rot');});
+PM('windmill','turns slowly around its front, like a windmill','#windmill',(P)=>{mvAdd(P,(P,dt)=>{P.st.Orientation=add(P.st.Orientation,[0,0,40*dt]);},'rot');});
+PM('heartbeat','beats like a heart (two quick pulses)','#heartbeat',(P)=>{mvAdd(P,(P,dt,m)=>{const u=m.t%1.1;const k=u<0.12?Math.sin(u/0.12*Math.PI)*0.18:(u>0.22&&u<0.34?Math.sin((u-0.22)/0.12*Math.PI)*0.12:0);P.st.Size=m.s0.map(v=>v*(1+k));},'size');});
+PM('breathe','slowly grows and shrinks, like breathing','#breathe',(P)=>{mvAdd(P,(P,dt,m)=>{const k=Math.sin(m.t*1.4)*0.06;P.st.Size=m.s0.map(v=>v*(1+k));},'size');});
+PM('squash_bounce','squashes when it lands and stretches when it jumps','#squash_bounce = 4',(P,a)=>{const h=tNum(a,4);mvAdd(P,(P,dt,m)=>{const u=(m.t*1.4)%1;const y=Math.sin(u*Math.PI);P.st.Position=add(m.p0,[0,y*h,0]);const sq=u<0.08||u>0.92?0.25:-0.1*y;P.st.Size=[m.s0[0]*(1+sq),m.s0[1]*(1-sq),m.s0[2]*(1+sq)];},'path');});
+PM('wiggle','wiggles its rotation quickly','#wiggle',(P)=>{mvAdd(P,(P,dt,m)=>{P.st.Orientation=[m.o0[0],m.o0[1]+Math.sin(m.t*18)*8,m.o0[2]];},'rot');});
+PM('elevator','goes up and down between two heights, waiting at each end','#elevator = 20',(P,a)=>{const H=tNum(a,20);mvAdd(P,(P,dt,m)=>{const T2=4+H/6,cyc=(m.t%(T2*2+4));let u;if(cyc<2)u=0;else if(cyc<2+T2)u=(cyc-2)/T2;else if(cyc<4+T2)u=1;else u=1-(cyc-4-T2)/T2;u=u*u*(3-2*u);P.st.Position=add(m.p0,[0,u*H,0]);},'path');});
+PM('sliding_door','slides open sideways and closes again','#sliding_door = 4s',(P,a)=>{const per=T(a)||4;mvAdd(P,(P,dt,m)=>{const u=(m.t%(per*2))<per?Math.min(1,(m.t%(per*2))*2):Math.max(0,1-((m.t%(per*2))-per)*2);P.st.Position=add(m.p0,[u*m.s0[0],0,0]);},'path');});
+PM('drawbridge','tips down and back up like a drawbridge','#drawbridge = 5s',(P,a)=>{const per=T(a)||5;mvAdd(P,(P,dt,m)=>{const x=(m.t%(per*2))/per;const u=x<1?Math.min(1,x*2):Math.max(0,1-(x-1)*2);P.st.Orientation=[m.o0[0]-u*80,m.o0[1],m.o0[2]];},'rot');});
+PM('seesaw','tips back and forth like a seesaw','#seesaw = 15',(P,a)=>{const A=tNum(a,15);mvAdd(P,(P,dt,m)=>{P.st.Orientation=[m.o0[0]+Math.sin(m.t*1.2)*A,m.o0[1],m.o0[2]];},'rot');});
+PM('carousel','goes round in a circle while turning, like a carousel horse','#carousel = 10',(P,a)=>{const r=tNum(a,10);mvAdd(P,(P,dt,m)=>{P.st.Position=add(m.p0,[Math.cos(m.t*0.8)*r-r,Math.sin(m.t*3)*0.8,Math.sin(m.t*0.8)*r]);P.st.Orientation=[m.o0[0],m.o0[1]-m.t*0.8/D2R,m.o0[2]];},'path');});
+PM('orbit_part','goes round another part (#orbit_part = 12 : Sun)','#orbit_part = 12 : Sun',(P,a)=>{const [rr,nm]=String(a).split(':');const r=tNum(rr,12);const Q=G.parts.find(q=>q.alive&&q.o&&q.o.name.toLowerCase()===String(nm).trim().toLowerCase());if(!Q)return;mvAdd(P,(P,dt,m)=>{if(!Q.alive)return false;P.st.Position=add(Q.st.Position,[Math.cos(m.t)*r,0,Math.sin(m.t)*r]);},'path');});
+PM('follow_path','moves through points in order, then loops (x,y,z ; x,y,z …)','#follow_path = 0,5,0 ; 20,5,0 ; 20,5,20',(P,a)=>{const pts=String(a).split(';').map(s=>parseVec(s.trim())).filter(Boolean);if(pts.length<2)return;mvAdd(P,(P,dt,m)=>{m.i=m.i||0;const g=pts[m.i%pts.length];const d=sub(g,P.st.Position);const L=len(d);if(L<0.3){m.i++;return;}P.st.Position=add(P.st.Position,mul(d,Math.min(L,10*dt)/L));},'path');});
+PM('teleport_part','moves it to a spot instantly','#teleport_part = 0,10,0',(P,a)=>{const v=parseVec(a);if(v)P.st.Position=v;});
+PM('step_forward','moves it a few studs the way it faces','#step_forward = 4',(P,a)=>{const R=eulerR(P.st.Orientation);P.st.Position=add(P.st.Position,mul(R[2],-tNum(a,4)));});
+PM('turn_left','turns it 90° to the left','#turn_left',(P)=>{P.st.Orientation=add(P.st.Orientation,[0,90,0]);});
+PM('turn_right','turns it 90° to the right','#turn_right',(P)=>{P.st.Orientation=add(P.st.Orientation,[0,-90,0]);});
+PM('flip_over','flips it upside down','#flip_over',(P)=>{P.st.Orientation=add(P.st.Orientation,[180,0,0]);});
+PM('straighten','turns it back so it stands straight','#straighten',(P)=>{P.st.Orientation=[0,0,0];});
+PM('random_rotation','turns it to a random angle','#random_rotation',(P)=>{P.st.Orientation=[rnd(0,360),rnd(0,360),rnd(0,360)];});
+PM('random_position','moves it to a random spot nearby','#random_position = 20',(P,a)=>{const r=tNum(a,20);P.st.Position=add(P.st.Position,[rnd(-r,r),0,rnd(-r,r)]);});
+PM('random_size_part','gives it a random size','#random_size_part',(P)=>{const k=rnd(0.5,2);P.st.Size=P.st.Size.map(v=>v*k);});
+PM('random_material','gives it a random material','#random_material',(P)=>{P.st.Material=MATERIALS[Math.floor(Math.random()*MATERIALS.length)];});
+PM('random_shape','gives it a random shape','#random_shape',(P)=>{const L=['Block','Ball','Cylinder','Wedge','Cone'];P.st.Shape=L[Math.floor(Math.random()*L.length)];});
+PM('grow_over','grows to twice its size over a time','#grow_over = 2s',(P,a)=>{const d=T(a)||2;mvAdd(P,(P,dt,m)=>{const u=Math.min(1,m.t/d);P.st.Size=m.s0.map(v=>v*(1+u));return u<1;},'size');});
+PM('shrink_away','shrinks to nothing, then disappears','#shrink_away = 1s',(P,a)=>{const d=T(a)||1;mvAdd(P,(P,dt,m)=>{const u=Math.min(1,m.t/d);P.st.Size=m.s0.map(v=>Math.max(0.01,v*(1-u)));if(u>=1){P.alive=false;return false;}},'size');});
+PM('pop','swells up and pops','#pop',(P)=>{mvAdd(P,(P,dt,m)=>{P.st.Size=m.s0.map(v=>v*(1+m.t*2.5));if(m.t>0.25){P.alive=false;sfx('pop');confettiAt(P.st.Position);return false;}},'size');});
+PM('melt','melts down into a puddle','#melt = 3s',(P,a)=>{const d=T(a)||3;mvAdd(P,(P,dt,m)=>{const u=Math.min(1,m.t/d);const sy=Math.max(0.15,m.s0[1]*(1-u));P.st.Size=[m.s0[0]*(1+u*0.6),sy,m.s0[2]*(1+u*0.6)];P.st.Position=[m.p0[0],m.p0[1]-(m.s0[1]-sy)/2,m.p0[2]];return u<1;},'size');});
+PM('dissolve','fades out, then disappears','#dissolve = 2s',(P,a)=>{const d=T(a)||2;mvAdd(P,(P,dt,m)=>{P.st.Transparency=Math.min(1,m.t/d);if(m.t>=d){P.alive=false;return false;}},'fade');});
+PM('crumble','breaks into falling pieces','#crumble',(P)=>{const s=P.st;const n=Math.min(4,Math.max(2,Math.round(Math.max(...s.Size)/3)));const pc=s.Size.map(v=>v/n);for(let i=0;i<n;i++)for(let j=0;j<n;j++)for(let k=0;k<n;k++){if(Math.random()<0.35)continue;spawnNew({Shape:'Block',Size:pc.map(v=>v*0.95),Color:s.Color,Material:s.Material,Position:add(s.Position,[(i+0.5)*pc[0]-s.Size[0]/2,(j+0.5)*pc[1]-s.Size[1]/2,(k+0.5)*pc[2]-s.Size[2]/2]),Anchored:false});}P.alive=false;sfx('explosion');});
+PM('freeze_solid','turns it into ice','#freeze_solid',(P)=>{P.st.Material='Ice';P.st.Color='#a6d8ff';P.st.Transparency=Math.max(P.st.Transparency||0,0.25);P.f.ice=1;});
+PM('petrify','turns it to stone','#petrify',(P)=>{P.st.Material='Slate';P.st.Color='#8a8a85';P.mvs=[];P.beh={};});
+PM('burn_up','catches fire, goes dark and burns away','#burn_up = 3s',(P,a)=>{const d=T(a)||3;P.fx=P.fx||{};P.fx.fire=1;P.fx.smoke=1;const c0=P.st.Color;mvAdd(P,(P,dt,m)=>{const u=Math.min(1,m.t/d);const A2=hex2rgb(c0);P.st.Color=rgb2hex(A2.map(v=>v*(1-u*0.85)));if(u>=1){P.alive=false;return false;}},'burn');});
+PM('phase','keeps switching between solid and see-through','#phase = 2s',(P,a)=>{const per=T(a)||2;mvAdd(P,(P,dt,m)=>{const on=Math.floor(m.t/per)%2===0;P.st.Transparency=on?0:0.7;P.collide=on&&P.st.CanCollide!==false;},'fade');});
+PM('stop_motion','stops every motion from the Motion commands','#stop_motion',(P)=>{P.mvs=[];});
+PM('reset_motion','stops motions and puts it back where it started','#reset_motion',(P)=>{const m=(P.mvs||[])[0];if(m){P.st.Position=m.p0.slice();P.st.Orientation=m.o0.slice();P.st.Size=m.s0.slice();}P.mvs=[];});
+/* motions that react to the player */
+const pl=()=>G.player;
+PM('avoid_player','scoots away when the player comes close','#avoid_player = 12',(P,a)=>{const r=tNum(a,12);mvAdd(P,(P,dt)=>{const d=sub(P.st.Position,pl().pos);d[1]=0;const L=len(d);if(L<r&&L>0.01)P.st.Position=add(P.st.Position,mul(d,10*dt/L));},'react');});
+PM('approach_player','creeps toward the player when they are near','#approach_player = 30',(P,a)=>{const r=tNum(a,30);mvAdd(P,(P,dt)=>{const d=sub(pl().pos,P.st.Position);d[1]=0;const L=len(d);if(L<r&&L>3)P.st.Position=add(P.st.Position,mul(d,4*dt/L));},'react');});
+PM('stalk','only moves toward the player when they are not looking at it','#stalk',(P)=>{mvAdd(P,(P,dt)=>{const h=pl();const d=sub(P.st.Position,h.pos);d[1]=0;const L=len(d);if(L<3)return;const lookF=norm(sub(cam.tgt,EYE||cam.tgt));const toP=norm(sub(P.st.Position,EYE||h.pos));if(dot(lookF,toP)<0.55)P.st.Position=add(P.st.Position,mul(d,-6*dt/L));},'react');});
+PM('peek','pops up when the player comes near and hides when they leave','#peek = 15',(P,a)=>{const r=tNum(a,15);mvAdd(P,(P,dt,m)=>{const near=len(sub(pl().pos,m.p0))<r;m.u=Math.max(0,Math.min(1,(m.u||0)+(near?3:-3)*dt));P.st.Position=add(m.p0,[0,-m.s0[1]+m.u*m.s0[1],0]);},'react');});
+PM('hide_when_near','turns invisible when the player is close','#hide_when_near = 10',(P,a)=>{const r=tNum(a,10);mvAdd(P,(P)=>{P.st.Transparency=len(sub(pl().pos,P.st.Position))<r?1:0;},'react');});
+PM('show_when_near','only shows up when the player is close','#show_when_near = 10',(P,a)=>{const r=tNum(a,10);mvAdd(P,(P)=>{P.st.Transparency=len(sub(pl().pos,P.st.Position))<r?0:1;},'react');});
+PM('glow_when_near','glows when the player is close','#glow_when_near = 12',(P,a)=>{const r=tNum(a,12);mvAdd(P,(P)=>{P.glow=len(sub(pl().pos,P.st.Position))<r?1:0;},'react');});
+PM('shake_when_near','shakes when the player is close','#shake_when_near = 10',(P,a)=>{const r=tNum(a,10);mvAdd(P,(P,dt,m)=>{const near=len(sub(pl().pos,m.p0))<r;P.st.Position=near?add(m.p0,[rnd(-0.25,0.25),0,rnd(-0.25,0.25)]):m.p0.slice();},'react');});
+PM('turn_to_player','keeps turning to face the player','#turn_to_player',(P)=>{mvAdd(P,(P)=>{const d=sub(pl().pos,P.st.Position);P.st.Orientation=[P.st.Orientation[0],Math.atan2(d[0],d[2])/D2R+180,P.st.Orientation[2]];},'rot');});
+PM('copy_player_moves','moves the same way the player moves','#copy_player_moves',(P)=>{mvAdd(P,(P,dt,m)=>{const h=pl();if(m.last){P.st.Position=add(P.st.Position,sub(h.pos,m.last));}m.last=h.pos.slice();},'react');});
+PM('mirror_player_moves','moves the opposite way the player moves','#mirror_player_moves',(P)=>{mvAdd(P,(P,dt,m)=>{const h=pl();if(m.last){const d=sub(h.pos,m.last);P.st.Position=add(P.st.Position,[-d[0],d[1],-d[2]]);}m.last=h.pos.slice();},'react');});
+PM('jump_with_player','hops whenever the player jumps','#jump_with_player',(P)=>{mvAdd(P,(P,dt,m)=>{const h=pl();if(!h.ground&&h.vel[1]>20&&!m.air){m.air=1;m.jt=0;}if(m.air){m.jt+=dt;P.st.Position=add(m.p0,[0,Math.max(0,Math.sin(m.jt*Math.PI/0.6))*4,0]);if(m.jt>0.6){m.air=0;P.st.Position=m.p0.slice();}}},'react');});
+PM('fall_when_stepped','falls a moment after someone stands on it','#fall_when_stepped = 0.5s',(P,a)=>{const d=T(a)||0.5;mvAdd(P,(P,dt,m)=>{if(!m.go&&G.humans.some(h=>h.gnd===P))m.go=m.t;if(m.go!=null&&m.t-m.go>d){P.st.Anchored=false;P.dyn=true;return false;}},'react');});
+PM('sink_when_stepped','sinks slowly while someone stands on it','#sink_when_stepped',(P)=>{mvAdd(P,(P,dt,m)=>{const on=G.humans.some(h=>h.gnd===P);const y=P.st.Position[1];P.st.Position[1]=on?y-2*dt:Math.min(m.p0[1],y+1*dt);},'react');});
+PM('rise_when_stepped','lifts up while someone stands on it','#rise_when_stepped = 15',(P,a)=>{const H=tNum(a,15);mvAdd(P,(P,dt,m)=>{const on=G.humans.some(h=>h.gnd===P);const y=P.st.Position[1];P.st.Position[1]=on?Math.min(m.p0[1]+H,y+4*dt):Math.max(m.p0[1],y-4*dt);},'react');});
+PM('tilt_when_stepped','tips toward where someone stands','#tilt_when_stepped',(P)=>{mvAdd(P,(P,dt,m)=>{let tx=0,tz=0;G.humans.forEach(h=>{if(h.gnd===P){const d=sub(h.pos,P.st.Position);tz+=d[0]*-2;tx+=d[2]*2;}});tx=Math.max(-25,Math.min(25,tx));tz=Math.max(-25,Math.min(25,tz));P.st.Orientation=[P.st.Orientation[0]+(m.o0[0]+tx-P.st.Orientation[0])*Math.min(1,3*dt),m.o0[1],P.st.Orientation[2]+(m.o0[2]+tz-P.st.Orientation[2])*Math.min(1,3*dt)];},'react');});
+PM('spin_when_stepped','spins while someone stands on it','#spin_when_stepped = 90',(P,a)=>{const s=tNum(a,90);mvAdd(P,(P,dt)=>{if(G.humans.some(h=>h.gnd===P))P.st.Orientation=add(P.st.Orientation,[0,s*dt,0]);},'react');});
+PM('glow_when_stepped','lights up while someone stands on it','#glow_when_stepped',(P)=>{mvAdd(P,(P)=>{P.glow=G.humans.some(h=>h.gnd===P)?1:0;},'react');});
+PM('color_when_stepped','changes color while someone stands on it','#color_when_stepped = lime',(P,a)=>{const on=COLOR_HEX(colorArg(a||'lime'));let off=null;mvAdd(P,(P)=>{off=off||P.st.Color;P.st.Color=G.humans.some(h=>h.gnd===P)?on:off;},'react');});
+
+/* ---------- building things ---------- */
+const BD=(name,help,ex,fn)=>ADD('Building',name,help,ex,(c,a)=>fn(ownerPos(c),a,c),{tg:true});
+const blk=(pos,size,col,mat,extra)=>spawnNew(Object.assign({Shape:'Block',Size:size,Color:COLOR_HEX(col),Material:mat||'SmoothPlastic',Position:pos,Anchored:true},extra||{}));
+const base=(p,a)=>{const v=parseVec(String(a||'').split(':')[0]);return v||add(p,[0,0,8]);};
+BD('build_stairs','builds a staircase (#build_stairs = 10)','#build_stairs = 10',(p,a)=>{const n=Math.min(60,Math.max(1,Math.floor(tNum(a,10))));for(let i=0;i<n;i++)blk(add(p,[0,i*1+0.5,6+i*1.5]),[6,1,1.5],'#c9b48a','WoodPlanks');});
+BD('build_spiral_stairs','builds stairs that wind upwards','#build_spiral_stairs = 20',(p,a)=>{const n=Math.min(80,Math.floor(tNum(a,20)));for(let i=0;i<n;i++){const an=i*0.45;blk(add(p,[Math.cos(an)*5,i*1.2+0.5,Math.sin(an)*5]),[4,0.8,2],'#b8bcc6','Concrete',{Orientation:[0,-an/D2R,0]});}blk(add(p,[0,n*0.6,0]),[1.5,n*1.2,1.5],'#8d929c','Concrete');});
+BD('build_tower','builds a tall stone tower','#build_tower = 30',(p,a)=>{const H=Math.min(200,tNum(a,30));const c=add(p,[0,0,12]);for(let i=0;i<4;i++){const an=i*Math.PI/2;blk(add(c,[Math.cos(an)*4,H/2,Math.sin(an)*4]),[an%Math.PI?8:1,H,an%Math.PI?1:8],'#9a978f','Slate');}for(let i=0;i<8;i++){const an=i*Math.PI/4;blk(add(c,[Math.cos(an)*4.2,H+1,Math.sin(an)*4.2]),[1.6,2,1.6],'#9a978f','Slate');}});
+BD('build_wall','builds a brick wall (#build_wall = 20)','#build_wall = 20',(p,a)=>{const L=Math.min(300,tNum(a,20));blk(add(p,[0,4,8]),[L,8,1.2],'#b5523b','Brick');});
+BD('build_ring','builds a ring of blocks around this spot','#build_ring = 16',(p,a)=>{const r=Math.min(80,tNum(a,16));const n=Math.max(8,Math.round(r*1.6));for(let i=0;i<n;i++){const an=i/n*Math.PI*2;blk(add(p,[Math.cos(an)*r,1,Math.sin(an)*r]),[2*Math.PI*r/n,2,1],'#d8d8d8','Concrete',{Orientation:[0,-an/D2R+90,0]});}});
+BD('build_pyramid','builds a pyramid of blocks','#build_pyramid = 6',(p,a)=>{const n=Math.min(14,Math.floor(tNum(a,6)));const c=add(p,[0,0,14]);for(let y=0;y<n;y++){const s=(n-y)*2;blk(add(c,[0,y*2+1,0]),[s*2,2,s*2],'#d9c08a','Sand');}});
+BD('build_tree','grows a tree here','#build_tree',(p)=>{const c=add(p,[rnd(-1,1),0,8]);const h=rnd(7,11);blk(add(c,[0,h/2,0]),[1.4,h,1.4],'#6b4a2f','Wood');[[0,h+1,0,6],[1.8,h-0.5,1,4],[-1.6,h-0.2,-1.2,4.2],[0.4,h+2.6,-0.5,3.6]].forEach(([x,y,z,s])=>spawnNew({Shape:'Ball',Size:[s,s*0.85,s],Color:COLOR_HEX(['#4b8b3b','#5a9a45','#3f7d34'][Math.floor(Math.random()*3)]),Material:'Grass',Position:add(c,[x,y,z]),Anchored:true}));});
+BD('build_forest','grows a small forest around here','#build_forest = 12',(p,a)=>{const n=Math.min(40,Math.floor(tNum(a,12)));for(let i=0;i<n;i++){const an=Math.random()*Math.PI*2,r=rnd(10,40);CMDS.build_tree.fn({P:{kind:'part',st:{Position:add(p,[Math.cos(an)*r,0,Math.sin(an)*r-8])}}},'');}});
+BD('build_rock','drops a big rock here','#build_rock',(p)=>{const s=rnd(3,6);spawnNew({Shape:'Ball',Size:[s*1.3,s*0.8,s],Color:'#7d7a74',Material:'Rock',Position:add(p,[0,s*0.3,8]),Orientation:[rnd(-10,10),rnd(0,360),rnd(-10,10)],Anchored:true});});
+BD('build_bush','plants a bush here','#build_bush',(p)=>{for(let i=0;i<3;i++)spawnNew({Shape:'Ball',Size:[rnd(2.2,3.2),rnd(1.8,2.6),rnd(2.2,3.2)],Color:'#3f8a3a',Material:'Grass',Position:add(p,[rnd(-1,1),1,8+rnd(-1,1)]),Anchored:true});});
+BD('build_flower','plants a flower here','#build_flower = pink',(p,a)=>{const c=add(p,[0,0,6]);const col=COLOR_HEX(colorArg(a||'pink'));blk(add(c,[0,0.9,0]),[0.2,1.8,0.2],'#3e8a37','Grass');for(let i=0;i<5;i++){const an=i/5*Math.PI*2;spawnNew({Shape:'Ball',Size:[0.6,0.25,0.6],Color:col,Material:'SmoothPlastic',Position:add(c,[Math.cos(an)*0.45,1.85,Math.sin(an)*0.45]),Anchored:true});}spawnNew({Shape:'Ball',Size:[0.45,0.45,0.45],Color:'#ffd23d',Material:'SmoothPlastic',Position:add(c,[0,1.9,0]),Anchored:true});});
+BD('build_lamp_post','puts up a street lamp that glows','#build_lamp_post',(p)=>{const c=add(p,[0,0,6]);blk(add(c,[0,5,0]),[0.5,10,0.5],'#2b2d33','Metal');const L=spawnNew({Shape:'Ball',Size:[1.4,1.4,1.4],Color:'#fff1c2',Material:'Neon',Position:add(c,[0,10.4,0]),Anchored:true});if(L)L.light={r:30,col:'#ffe3a1'};});
+BD('build_bridge','builds a wooden bridge forward','#build_bridge = 30',(p,a)=>{const L=Math.min(200,tNum(a,30));const n=Math.floor(L/1.2);for(let i=0;i<n;i++)blk(add(p,[0,0.4,6+i*1.2]),[6,0.4,1],i%2?'#9b7b55':'#8c6d49','WoodPlanks');blk(add(p,[3.2,1.6,6+L/2]),[0.3,0.3,L],'#6e5236','Wood');blk(add(p,[-3.2,1.6,6+L/2]),[0.3,0.3,L],'#6e5236','Wood');});
+BD('build_platform','builds a floating platform above this spot','#build_platform = 12',(p,a)=>{const s=Math.min(100,tNum(a,12));blk(add(p,[0,10,0]),[s,1,s],'#cfd3da','Concrete');});
+BD('build_arch','builds a stone arch','#build_arch = 10',(p,a)=>{const r=Math.min(40,tNum(a,10));const c=add(p,[0,0,12]);for(let i=0;i<=12;i++){const an=i/12*Math.PI;blk(add(c,[Math.cos(an)*r,Math.sin(an)*r+1,0]),[2.2,2.2,2],'#a8a49b','Cobblestone',{Orientation:[0,0,an/D2R]});}});
+BD('build_fence','builds a wooden fence line','#build_fence = 20',(p,a)=>{const L=Math.min(200,tNum(a,20));const n=Math.floor(L/3);for(let i=0;i<=n;i++)blk(add(p,[i*3-L/2,1.5,8]),[0.4,3,0.4],'#8a6a45','Wood');[1,2.3].forEach(y=>blk(add(p,[0,y,8]),[n*3,0.25,0.15],'#a07c52','Wood'));});
+BD('build_house','builds a small house','#build_house',(p)=>{const c=add(p,[0,0,16]);blk(add(c,[0,0.25,0]),[14,0.5,12],'#8d7458','WoodPlanks');[[0,4,-6,14,8,0.6],[-7,4,0,0.6,8,12],[7,4,0,0.6,8,12]].forEach(([x,y,z,a2,b,d])=>blk(add(c,[x,y,z]),[a2,b,d],'#e7dcc6','Plastic'));blk(add(c,[-4.5,4,6]),[5,8,0.6],'#e7dcc6');blk(add(c,[4.5,4,6]),[5,8,0.6],'#e7dcc6');blk(add(c,[0,7,6]),[4,2,0.6],'#e7dcc6');
+ [-1,1].forEach(s=>spawnNew({Shape:'Wedge',Size:[15,4,7],Color:'#a1453a',Material:'Slate',Position:add(c,[0,10,s*3.5]),Orientation:[0,s>0?0:180,0],Anchored:true}));});
+BD('build_chair','builds a chair','#build_chair',(p)=>{const c=add(p,[0,0,6]);blk(add(c,[0,1.5,0]),[2,0.3,2],'#8a5a3a','Wood');[[-0.8,-0.8],[0.8,-0.8],[-0.8,0.8],[0.8,0.8]].forEach(([x,z])=>blk(add(c,[x,0.7,z]),[0.25,1.4,0.25],'#7a4e32','Wood'));blk(add(c,[0,2.6,0.9]),[2,2,0.25],'#8a5a3a','Wood');});
+BD('build_table','builds a table','#build_table',(p)=>{const c=add(p,[0,0,8]);blk(add(c,[0,2.6,0]),[6,0.35,3.5],'#9a6b43','WoodPlanks');[[-2.6,-1.4],[2.6,-1.4],[-2.6,1.4],[2.6,1.4]].forEach(([x,z])=>blk(add(c,[x,1.2,z]),[0.35,2.4,0.35],'#7a5434','Wood'));});
+BD('build_campfire','builds a campfire with real fire','#build_campfire',(p)=>{const c=add(p,[0,0,8]);for(let i=0;i<5;i++){const an=i/5*Math.PI*2;spawnNew({Shape:'Cylinder',Size:[2.6,0.5,0.5],Color:'#5b3b25',Material:'Wood',Position:add(c,[Math.cos(an)*0.5,0.4,Math.sin(an)*0.5]),Orientation:[0,-an/D2R,20],Anchored:true});}for(let i=0;i<8;i++){const an=i/8*Math.PI*2;spawnNew({Shape:'Ball',Size:[0.9,0.7,0.9],Color:'#77736c',Material:'Rock',Position:add(c,[Math.cos(an)*1.9,0.3,Math.sin(an)*1.9]),Anchored:true});}const F=spawnNew({Shape:'Ball',Size:[0.6,0.6,0.6],Color:'#ff8a2a',Material:'Neon',Position:add(c,[0,0.8,0]),Anchored:true,CanCollide:false});if(F){F.fx={fire:1,smoke:1};F.light={r:24,col:'#ff9a3c'};}});
+BD('build_snowman','builds a snowman','#build_snowman',(p)=>{const c=add(p,[0,0,8]);[[0,1.6,3.2],[0,4.2,2.4],[0,6.1,1.7]].forEach(([x,y,s])=>spawnNew({Shape:'Ball',Size:[s,s,s],Color:'#f4f7fb',Material:'SmoothPlastic',Position:add(c,[x,y,0]),Anchored:true}));spawnNew({Shape:'Cone',Size:[0.35,1.2,0.35],Color:'#ff8a2a',Material:'SmoothPlastic',Position:add(c,[0,6.1,-1.2]),Orientation:[-90,0,0],Anchored:true});[-0.35,0.35].forEach(x=>spawnNew({Shape:'Ball',Size:[0.22,0.22,0.22],Color:'#1b1b1b',Position:add(c,[x,6.45,-0.8]),Anchored:true}));});
+BD('build_dominoes','sets up a line of dominoes','#build_dominoes = 20',(p,a)=>{const n=Math.min(100,Math.floor(tNum(a,20)));for(let i=0;i<n;i++)spawnNew({Shape:'Block',Size:[2,4,0.4],Color:i%2?'#f2f2f2':'#1f1f22',Material:'SmoothPlastic',Position:add(p,[0,2,6+i*2.2]),Anchored:false});});
+BD('build_jump_pads','lays out a row of jump pads','#build_jump_pads = 5',(p,a)=>{const n=Math.min(30,Math.floor(tNum(a,5)));for(let i=0;i<n;i++){const P=blk(add(p,[0,0.25,8+i*14]),[4,0.5,4],'#36d17a','Neon');if(P)P.f.tramp=1;}});
+BD('build_coin_trail','lays a line of coins to collect','#build_coin_trail = 10',(p,a)=>{const n=Math.min(100,Math.floor(tNum(a,10)));for(let i=0;i<n;i++){const P=spawnNew({Shape:'Cylinder',Size:[0.3,2,2],Color:'#ffcf3a',Material:'Metal',Position:add(p,[0,2,6+i*4]),Orientation:[0,0,90],Anchored:true,CanCollide:false});if(P){P.f.coin=1;P.beh.spin=[0,120,0];}}});
+BD('build_maze','builds a maze you can walk through','#build_maze = 8',(p,a)=>{const n=Math.min(16,Math.max(3,Math.floor(tNum(a,8))));const cs=8,W=[];for(let i=0;i<n;i++){W.push([]);for(let j=0;j<n;j++)W[i].push({v:0,e:1,s:1});}
+ const st=[[0,0]];W[0][0].v=1;while(st.length){const [x,y]=st[st.length-1];const nb=[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dy])=>[x+dx,y+dy,dx,dy]).filter(([a2,b])=>a2>=0&&b>=0&&a2<n&&b<n&&!W[a2][b].v);if(!nb.length){st.pop();continue;}const [nx,ny,dx,dy]=nb[Math.floor(Math.random()*nb.length)];if(dx===1)W[x][y].e=0;if(dx===-1)W[nx][ny].e=0;if(dy===1)W[x][y].s=0;if(dy===-1)W[nx][ny].s=0;W[nx][ny].v=1;st.push([nx,ny]);}
+ const o=add(p,[-n*cs/2,0,10]);const H=5;blk(add(o,[n*cs/2,H/2,0]),[n*cs,H,0.8],'#6f8c5a','Grass');blk(add(o,[0,H/2,n*cs/2]),[0.8,H,n*cs],'#6f8c5a','Grass');
+ for(let i=0;i<n;i++)for(let j=0;j<n;j++){const C=W[i][j];if(C.e&&!(i===n-1&&j===n-1))blk(add(o,[(i+1)*cs,H/2,(j+0.5)*cs]),[0.8,H,cs+0.8],'#6f8c5a','Grass');if(C.s)blk(add(o,[(i+0.5)*cs,H/2,(j+1)*cs]),[cs+0.8,H,0.8],'#6f8c5a','Grass');}});
+BD('build_obby','builds a short obstacle course of jumps','#build_obby = 10',(p,a)=>{const n=Math.min(40,Math.floor(tNum(a,10)));let q=add(p,[0,1,8]);for(let i=0;i<n;i++){q=add(q,[rnd(-4,4),rnd(0,2),rnd(7,10)]);const P=blk(q,[rnd(2.5,4),1,rnd(2.5,4)],['#ff5c5c','#ffb84d','#ffe14d','#5cd65c','#4da6ff','#a970ff'][i%6],'Plastic');if(i===n-1&&P){P.f.win=1;P.st.Color='#ffd700';P.st.Material='Neon';}}});
+BD('build_ramp','builds a ramp','#build_ramp = 20',(p,a)=>{const L=Math.min(100,tNum(a,20));spawnNew({Shape:'Wedge',Size:[8,L/3,L],Color:'#b0b4bb',Material:'Concrete',Position:add(p,[0,L/6,8+L/2]),Anchored:true});});
+BD('build_pillar','builds a stone pillar','#build_pillar = 14',(p,a)=>{const H=Math.min(200,tNum(a,14));const c=add(p,[0,0,8]);blk(add(c,[0,0.5,0]),[3.2,1,3.2],'#d6d2c4','Marble');spawnNew({Shape:'Cylinder',Size:[H,2.2,2.2],Color:'#e3dfd2',Material:'Marble',Position:add(c,[0,H/2+1,0]),Orientation:[0,0,90],Anchored:true});blk(add(c,[0,H+1.5,0]),[3.2,1,3.2],'#d6d2c4','Marble');});
+BD('build_cloud','puts a fluffy cloud in the sky above','#build_cloud',(p)=>{const c=add(p,[rnd(-10,10),rnd(40,60),rnd(-10,10)]);for(let i=0;i<6;i++){const s=rnd(5,9);spawnNew({Shape:'Ball',Size:[s*1.3,s*0.8,s],Color:'#ffffff',Material:'SmoothPlastic',Position:add(c,[rnd(-6,6),rnd(-1,1.5),rnd(-3,3)]),Anchored:true,CanCollide:false});}});
+BD('build_well','builds a stone well','#build_well',(p)=>{const c=add(p,[0,0,8]);for(let i=0;i<12;i++){const an=i/12*Math.PI*2;blk(add(c,[Math.cos(an)*2.6,1.2,Math.sin(an)*2.6]),[1.5,2.4,0.8],'#8d8a83','Cobblestone',{Orientation:[0,-an/D2R+90,0]});}[-2.6,2.6].forEach(x=>blk(add(c,[x,3.8,0]),[0.4,5,0.4],'#6e5236','Wood'));spawnNew({Shape:'Wedge',Size:[6.4,1.6,3.4],Color:'#7a3b30',Material:'Slate',Position:add(c,[0,6.8,0]),Anchored:true});});
+BD('build_ladder','builds a ladder you can climb','#build_ladder = 12',(p,a)=>{const H=Math.min(200,tNum(a,12));const c=add(p,[0,0,6]);[-1,1].forEach(x=>blk(add(c,[x,H/2,0]),[0.3,H,0.3],'#8a6a45','Wood'));for(let y=1;y<H;y+=1.4)blk(add(c,[0,y,0]),[2,0.2,0.2],'#a07c52','Wood');const Z=spawnNew({Shape:'Block',Size:[2.4,H,1.2],Color:'#ffffff',Transparency:1,Position:add(c,[0,H/2,0.5]),Anchored:true,CanCollide:false});if(Z)Z.f.ladder=1;});
+BD('build_pool','builds a pool of water','#build_pool = 16',(p,a)=>{const s=Math.min(100,tNum(a,16));const c=add(p,[0,0,s/2+6]);[[0,-s/2],[0,s/2]].forEach(([x,z])=>blk(add(c,[x,1,z]),[s+1,2,1],'#e9e6df','Concrete'));[[-s/2,0],[s/2,0]].forEach(([x,z])=>blk(add(c,[x,1,z]),[1,2,s],'#e9e6df','Concrete'));const W=spawnNew({Shape:'Block',Size:[s,1.6,s],Color:'#3d9ad6',Material:'Glass',Transparency:0.35,Position:add(c,[0,0.8,0]),Anchored:true,CanCollide:false});if(W)W.f.water=1;});
+BD('build_trampoline','builds a trampoline','#build_trampoline',(p)=>{const c=add(p,[0,0,8]);const T2=spawnNew({Shape:'Cylinder',Size:[0.4,8,8],Color:'#1f2a44',Material:'Fabric',Position:add(c,[0,2,0]),Orientation:[0,0,90],Anchored:true});if(T2)T2.f.tramp=1;for(let i=0;i<6;i++){const an=i/6*Math.PI*2;blk(add(c,[Math.cos(an)*3.6,1,Math.sin(an)*3.6]),[0.3,2,0.3],'#9aa1ad','Metal');}});
+BD('build_goal','builds a soccer goal','#build_goal',(p)=>{const c=add(p,[0,0,16]);[-6,6].forEach(x=>blk(add(c,[x,2.5,0]),[0.4,5,0.4],'#ffffff','Metal'));blk(add(c,[0,5,0]),[12.4,0.4,0.4],'#ffffff','Metal');spawnNew({Shape:'Block',Size:[12,5,0.1],Color:'#ffffff',Transparency:0.6,Material:'Fabric',Position:add(c,[0,2.5,3]),Anchored:true});});
+BD('build_target','builds an archery target','#build_target',(p)=>{const c=add(p,[0,0,12]);[[6,'#ffffff'],[4.6,'#e84545'],[3.2,'#ffffff'],[1.8,'#e84545'],[0.8,'#ffd23d']].forEach(([s,col],i)=>spawnNew({Shape:'Cylinder',Size:[0.3+i*0.05,s,s],Color:col,Material:'SmoothPlastic',Position:add(c,[0,4,-i*0.05]),Orientation:[0,90,0],Anchored:true}));blk(add(c,[0,1,0.5]),[0.4,2.6,0.4],'#7a5434','Wood');});
+BD('build_checkerboard','lays a checkerboard floor','#build_checkerboard = 8',(p,a)=>{const n=Math.min(20,Math.floor(tNum(a,8)));const s=3,o=add(p,[-n*s/2,0.1,6]);for(let i=0;i<n;i++)for(let j=0;j<n;j++)blk(add(o,[i*s+s/2,0,j*s+s/2]),[s,0.2,s],(i+j)%2?'#1f2024':'#f1f1ee','SmoothPlastic');});
+BD('build_steps_up','builds floating steps that climb up','#build_steps_up = 12',(p,a)=>{const n=Math.min(60,Math.floor(tNum(a,12)));for(let i=0;i<n;i++){const an=i*0.5;blk(add(p,[Math.cos(an)*8,2+i*2.2,Math.sin(an)*8]),[3,0.6,3],'#9fb4ff','Neon');}});
+BD('build_dome','builds a glass dome','#build_dome = 12',(p,a)=>{const r=Math.min(40,tNum(a,12));const c=add(p,[0,0,r+6]);for(let ring=0;ring<6;ring++){const el=ring/6*Math.PI/2,rr=Math.cos(el)*r,y=Math.sin(el)*r,n=Math.max(6,Math.round(rr*1.2));for(let i=0;i<n;i++){const an=i/n*Math.PI*2;blk(add(c,[Math.cos(an)*rr,y,Math.sin(an)*rr]),[2*Math.PI*rr/n+0.2,r*0.28,0.3],'#bfe3ff','Glass',{Transparency:0.5,Orientation:[0,-an/D2R+90,-el/D2R]});}}});
+BD('clear_built','removes every part made with the Building commands','#clear_built',()=>{G.parts.forEach(P=>{if(P.o&&String(P.o.id).startsWith('s'))P.alive=false;});});
+})();
+
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
 function init(){if(!load())defaultPlace();lastSnap=snapState();bind();let dv=null;try{dv=localStorage.getItem('buildx-device');}catch(e){}setDevice(dv||(matchMedia('(pointer:coarse)').matches?'mob':'pc'));if(!dv)$('devpick').style.display='flex';applySettings();refreshToolbox();refreshAll();out('👋 Welcome to BuildX! '+Object.keys(CMDS).length+' commands, '+CATALOG.length+' things to insert. Press ▶ Play to test.');startIcons();requestAnimationFrame(frame);}
 
