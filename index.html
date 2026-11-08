@@ -5435,18 +5435,45 @@ const _rp=refreshProps;refreshProps=function(){_rp.apply(this,arguments);const p
  pp.querySelectorAll('[data-mx]').forEach(b=>b.onclick=()=>{const k=b.dataset.mx;if(k==='edit')meOpen(o);else if(k==='make')texMaker(o);else if(k==='tpl')downloadTemplate(o);else if(k==='imp')importTexture(o);else{delete o.props.Texture;delete o.props.TexShapes;commit();refreshProps();}});};
 })();
 
-/* ================= 25. easy event lines: #touch = kill  ·  #click = explode ================= */
+/* ================= 25. easy event lines replace the old long ones: #touch = kill  ·  #click = explode ================= */
 (function(){
-/* #touch = X   means: when someone touches this, do X to them      (#if = toucher = touch = X = toucher)
-   #click = X   means: when someone clicks this, do X               (#on = click = X)                    */
+const forToucher=C=>C&&C.hum&&C.touch;/* commands that act on a player (kill, heal, add_item…) go to whoever touched */
+/* #touch = X   = when someone touches this, do X (to them, if X is something you do to a player)
+   #click = X   = when someone clicks this, do X */
 function easy(src){return String(src==null?'':src).split('\n').map(l=>{const m=l.match(/^(\s*)#\s*(touch|touched|click|clicked|tap|tapped)\s*=\s*(.+)$/i);if(!m)return l;let rest=m[3].trim();const ev=/^(touch|touched)$/i.test(m[2])?'touch':'click';
  const parts=rest.split(/\s*=\s*/);const n=parts[0].toLowerCase().replace(/\s+/g,'_');const C=CMDS[n];
- if(ev==='touch'){if(C&&C.tg){const who='toucher';if(parts.length===1)rest=parts[0]+' = '+who;else if(!/^(toucher|touched|everyone|all|player|self|bots)\b/i.test(parts[1]))rest=parts[0]+' = '+who+' : '+parts.slice(1).join(' = ');}
+ if(ev==='touch'){if(forToucher(C)){if(parts.length===1)rest=parts[0]+' = toucher';else if(!/^(toucher|touched|everyone|everybody|all|player|players|self|bots)\b/i.test(parts[1]))rest=parts[0]+' = toucher : '+parts.slice(1).join(' = ');}
   return m[1]+'#if = toucher = touch = '+rest;}
  return m[1]+'#on = click = '+rest;}).join('\n');}
-window.bxEasyCode=easy;
-const _c=compile;compile=function(src){return _c.call(this,easy(src));};
-const _k=checkCode;checkCode=function(src){return _k.call(this,easy(src));};
+/* the old long forms, turned into the easy ones */
+function toEasyLine(l){const m=l.match(/^(\s*)#\s*(.+?)\s*$/);if(!m)return l;const T=m[2].split(/\s*=\s*/);const lo=T.map(x=>x.toLowerCase());const pre=m[1];
+ const strip=(rest)=>{if(rest.length>1&&/^toucher\b/i.test(rest[1])){const a=rest[1].replace(/^toucher\s*:?\s*/i,'');return [rest[0]].concat(a?[a]:[],rest.slice(2));}return rest;};
+ if(lo[0]==='if'&&lo[1]==='toucher'&&lo[2]==='touch'&&T.length>3)return pre+'#touch = '+strip(T.slice(3)).join(' = ');
+ if(lo[0]==='if'&&lo[1]==='touch'&&T.length>2)return pre+'#touch = '+strip(T.slice(2)).join(' = ');
+ if(lo[0]==='on'&&(lo[1]==='touch'||lo[1]==='touched')&&T.length>2)return pre+'#touch = '+strip(T.slice(2)).join(' = ');
+ if(lo[0]==='on'&&(lo[1]==='click'||lo[1]==='tap')&&T.length>2)return pre+'#click = '+T.slice(2).join(' = ');
+ if(T.length>2&&lo[T.length-2]==='on'&&(lo[T.length-1]==='click'||lo[T.length-1]==='tap'))return pre+'#click = '+T.slice(0,-2).join(' = ');
+ return l;}
+const toEasy=src=>String(src==null?'':src).split('\n').map(toEasyLine).join('\n');
+window.bxEasyCode=easy;window.bxToEasy=toEasy;
+const isOld=l=>toEasyLine(l)!==l;
+/* running: easy lines become what the engine understands */
+const _c=compile;compile=function(src){return _c.call(this,easy(toEasy(src)));};
+/* checking: the old forms are gone, so they get a red mark with the easy way to write it */
+const _k=checkCode;checkCode=function(src){const r=_k.call(this,easy(src));String(src||'').split('\n').forEach((l,i)=>{if(isOld(l)){r.res=(r.res||[]).filter(x=>x.ln!==i+1);r.res.push({ln:i+1,lvl:'err',msg:'this old way was replaced. Write: '+toEasyLine(l).trim()});}});r.res&&r.res.sort((a,b)=>a.ln-b.ln);return r;};
+/* every game, script and example gets the easy style */
+function convertAll(){if(typeof S==='undefined'||!S)return 0;let n=0;const fix=o=>{if(o&&typeof o.code==='string'){const c=toEasy(o.code);if(c!==o.code){o.code=c;n++;}}};
+ (S.items||[]).forEach(fix);(S.guis||[]).forEach(g=>(g.els||[]).forEach(fix));if(typeof S.playerCode==='string'){const c=toEasy(S.playerCode);if(c!==S.playerCode){S.playerCode=c;n++;}}return n;}
+window.bxConvertAll=convertAll;
+(window.bxScripts||[]).forEach(s=>{if(s.code)s.code=toEasy(s.code);});
+(function walk(list){(list||[]).forEach(q=>{if(!q)return;if(q.parts)walk(q.parts);if(typeof q.code==='string')q.code=toEasy(q.code);});})(typeof CATALOG!=='undefined'?CATALOG.flatMap(e=>e.spec||[]):[]);
+Object.values(CMDS).forEach(C=>{['help','ex'].forEach(k=>{if(typeof C[k]==='string'&&/#(if|on)\s*=\s*(toucher\s*=\s*)?(touch|click)/i.test(C[k]))C[k]=C[k].replace(/#(?:if|on)\s*=\s*(?:toucher\s*=\s*)?(?:touch|click)\s*=\s*[^)\n]+/gi,mt=>toEasyLine(mt));});});
+const ta=document.getElementById('codeta');if(ta)ta.placeholder=toEasy(ta.placeholder);
+if(convertAll()){try{save();}catch(e){}}
+if(typeof restore==='function'){const _r=restore;restore=function(){const x=_r.apply(this,arguments);convertAll();return x;};}
+if(typeof openCode==='function'){const _o=openCode;openCode=function(o){if(o&&typeof o.code==='string')o.code=toEasy(o.code);return _o.apply(this,arguments);};}
+const _sp=startPlay;startPlay=function(){convertAll();return _sp.apply(this,arguments);};
+try{refreshToolbox();}catch(e){}
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
