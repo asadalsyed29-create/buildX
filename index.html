@@ -285,7 +285,7 @@ body.playing.ctrl #ctrlexit{display:block}body.playing.ctrl.mob #downb{display:g
   <button class="tb" id="b_ungroup" title="Ungroup (Ctrl+U)">📤<span class="lbl"> Ungroup</span></button>
   <button class="tb" id="b_dup" title="Duplicate (Ctrl+D)">⧉<span class="lbl"> Copy</span></button>
   <button class="tb" id="b_del" title="Delete">🗑️<span class="lbl"> Delete</span></button>
-  <button class="tb" id="b_multi" title="Multi-select (tap to add)">➕<span class="lbl"> Pick many</span></button>
+  <button class="tb" id="b_multi" hidden style="display:none" title="Multi-select (tap to add)">➕<span class="lbl"> Pick many</span></button>
   </div>
   <div class="sep"></div>
   <button class="tb" id="b_undo" title="Undo (Ctrl+Z)">↶<span class="lbl"> Undo</span></button>
@@ -4303,7 +4303,7 @@ IV('pickup_range','how far away they grab dropped items from','#pickup_range = t
 IV('auto_eat','eats food items from the bag when health gets low','#auto_eat = toucher',(c,h)=>{h.bxAutoEat=1;});
 IV('item_heals','sets how much health an item gives when used (item : amount)','#item_heals = toucher : apple : 20',(c,h,a)=>{const [n,k]=String(a).split(':');(G.bxFood=G.bxFood||{})[key(n)]=nm(k,20);});
 const DROPS=[];
-function dropPickup(p,n,k){const col={coin:'#f5c542',gem:'#4fd0ff',key:'#e8c040',apple:'#d43a2a',potion:'#b05ae0'}[n]||'#d9d2c3';const P=spawnNow({Shape:n==='coin'?'Cylinder':'Block',Size:n==='coin'?[1.6,0.35,1.6]:[1.1,1.1,1.1],Color:col,Material:n==='coin'?'Metal':'SmoothPlastic',Position:p,Anchored:true,CanCollide:false,Name:'Drop_'+n});P.bxDrop={n,k,t:0,y:p[1]};DROPS.push(P);}
+function dropPickup(p,n,k){const col={coin:'#f5c542',gem:'#4fd0ff',key:'#e8c040',apple:'#d43a2a',potion:'#b05ae0'}[n]||'#d9d2c3';const P=spawnNow({Shape:n==='coin'?'Cylinder':'Block',Size:n==='coin'?[0.35,1.6,1.6]:[1.1,1.1,1.1],Color:col,Material:n==='coin'?'Metal':'SmoothPlastic',Position:p,Anchored:true,CanCollide:false,Name:'Drop_'+n});P.bxDrop={n,k,t:0,y:p[1]};DROPS.push(P);}
 function bxPickups(dt){for(let i=DROPS.length-1;i>=0;i--){const P=DROPS[i];if(!P.alive){DROPS.splice(i,1);continue;}const d=P.bxDrop;d.t+=dt;P.st.Position[1]=d.y+Math.sin(d.t*3)*0.3;P.st.Orientation=[0,d.t*90,0];if(d.t<0.6)continue;
   for(const h of G.humans){if(h.dead||h.kind==='bot')continue;if(len(sub(add(h.pos,[0,1.5,0]),P.st.Position))<(h.bxReach||3.5)){if(d.n==='coin'){h.stats.coins=(h.stats.coins||0)+d.k;sfx('coin');}else{if(!addItem(h,d.n,d.k))continue;sfx('pop');}P.alive=false;DROPS.splice(i,1);break;}}}
  G.humans.forEach(h=>{if(h.bxAutoEat&&!h.dead&&h.hp<h.max*0.35){const F=G.bxFood||{apple:20,bread:30,potion:50};const n=Object.keys(inv(h)).find(k=>F[k]);if(n){remItem(h,n,1);h.hp=Math.min(h.max,h.hp+F[n]);sfx('powerup');}}});}
@@ -4392,6 +4392,184 @@ const ws0=gameStep;gameStep=function(dt0){ws0.apply(this,arguments);if(G)weather
 const sp1=stopPlay;stopPlay=function(){hillTime=0;DROPS.length=0;return sp1.apply(this,arguments);};
 /* hidden bots are not drawn: shrink them to nothing for the frame */
 const r0=render;render=function(){const hid=G?G.bots.filter(h=>h.bxHidden):[];const keep=hid.map(h=>h.size);hid.forEach(h=>h.size=0.0001);try{return r0.apply(this,arguments);}finally{hid.forEach((h,i)=>h.size=keep[i]);}};
+})();
+
+/* ================= 16. base command batch 5: particle effects, physics links, lights, survival stats ================= */
+(function(){
+const ADD=(cat,name,help,ex,fn,opt)=>{if(CMDS[name])return false;reg(cat,name,help,ex,fn,opt);return true;};
+const nm=(a,d)=>{const v=parseFloat(evalExpr(String(a==null?'':a).trim()));return isFinite(v)?v:d;};
+const TT=a=>{const s=String(a||'').trim();if(!s)return 0;const v=parseTime(s);return isFinite(v)?v:nm(s,0);};
+const key=s=>String(s||'').trim().toLowerCase();
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=L=>L[Math.floor(Math.random()*L.length)];
+const later=(t,f)=>{if(G)G.later.push([G.t+t,f]);};
+const SP=pr=>{const P=spawnNew(Object.assign({Anchored:true,Material:'SmoothPlastic'},pr));P.obb=obbOfSt(P.st);P.brad=len(P.st.Size)/2;return P;};
+
+/* per-frame: effects, links, stats, lights */
+const gb0=gameStep;gameStep=function(dt0){gb0.apply(this,arguments);if(!G)return;const dt=dt0*G.ts;
+ G.parts.forEach(P=>{if(!P.alive)return;
+  if(P.bxfx)emitFx(P,dt);});
+ linkStep(dt);statsStep(dt);lightStep(dt);};
+
+/* ======================= particle effects ======================= */
+const FX={
+ spray:{rate:40,mk:(p,s)=>({p:add(p,[0,s[1]/2,0]),v:[rnd(-6,6),rnd(28,36),rnd(-6,6)],life:1.4,col:pick(['#cfeaff','#a8d8ff','#ffffff']),sz:3,g:1})},
+ embers:{rate:18,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2),0.5,rnd(-s[2]/2,s[2]/2)]),v:[rnd(-3,3),rnd(10,22),rnd(-3,3)],life:2.2,col:pick(['#ff9a2a','#ffcf5a','#ff5a1f']),sz:2.5,g:-0.05})},
+ flame:{rate:30,mk:(p)=>({p:add(p,[rnd(-0.2,0.2),0.2,rnd(-0.2,0.2)]),v:[rnd(-1,1),rnd(5,9),rnd(-1,1)],life:0.5,col:pick(['#ffcf5a','#ff9a2a','#ff6a1f']),sz:5,g:-0.05})},
+ steam:{rate:20,mk:(p,s)=>({p:add(p,[rnd(-0.5,0.5),s[1]/2,rnd(-0.5,0.5)]),v:[rnd(-1.5,1.5),rnd(8,12),rnd(-1.5,1.5)],life:2,col:'#e8eef2',sz:9,g:-0.02})},
+ sparkler:{rate:60,mk:(p,s)=>{const a=Math.random()*6.283,b=Math.random()*3.14;return {p:add(p,[0,s[1]/2,0]),v:[Math.cos(a)*Math.sin(b)*18,Math.cos(b)*18,Math.sin(a)*Math.sin(b)*18],life:0.35,col:pick(['#fff6c4','#ffe08a','#ffffff']),sz:2,g:0.4};}},
+ smoke_column:{rate:12,mk:(p,s)=>({p:add(p,[rnd(-0.6,0.6),s[1]/2,rnd(-0.6,0.6)]),v:[rnd(-1,1)+((G.wind||[0])[0]||0)*0.1,rnd(6,9),rnd(-1,1)],life:5,col:pick(['#5b5d61','#6e7074','#4b4d51']),sz:12,g:-0.01})},
+ drip:{rate:2,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2),-s[1]/2,rnd(-s[2]/2,s[2]/2)]),v:[0,-2,0],life:1.2,col:'#7fc4ff',sz:2.5,g:1})},
+ fog_puffs:{rate:6,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2),0.5,rnd(-s[2]/2,s[2]/2)]),v:[rnd(-1.5,1.5),rnd(0,0.6),rnd(-1.5,1.5)],life:4,col:'#dfe5ea',sz:20,g:0})},
+ electric:{rate:14,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2),rnd(-s[1]/2,s[1]/2),rnd(-s[2]/2,s[2]/2)]),v:[rnd(-20,20),rnd(-20,20),rnd(-20,20)],life:0.15,col:pick(['#9be7ff','#ffffff','#6fb8ff']),sz:2.5,g:0})},
+ sand_fall:{rate:30,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2)*0.6,-s[1]/2,rnd(-s[2]/2,s[2]/2)*0.6]),v:[0,-3,0],life:1.4,col:pick(['#d9b77a','#c9a56a']),sz:2,g:1})},
+ snow_drift:{rate:16,mk:(p,s)=>({p:add(p,[rnd(-s[0],s[0]),s[1]/2+rnd(4,10),rnd(-s[2],s[2])]),v:[rnd(-1,1),-3,rnd(-1,1)],life:3,col:'#ffffff',sz:3,g:0.02})},
+ fountain_jet:{rate:50,mk:(p,s)=>({p:add(p,[0,s[1]/2,0]),v:[rnd(-1.5,1.5),rnd(45,55),rnd(-1.5,1.5)],life:2.2,col:pick(['#cfeaff','#a8d8ff']),sz:3,g:1})},
+ bubbles_up:{rate:8,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2),s[1]/2,rnd(-s[2]/2,s[2]/2)]),v:[rnd(-0.5,0.5),rnd(4,7),rnd(-0.5,0.5)],life:2.5,col:'#d6f0ff',sz:4,g:-0.02})},
+ magic_swirl:{rate:30,mk:(p,s,P)=>{P.bxA=(P.bxA||0)+0.5;const r=Math.max(s[0],s[2])/2+1;return {p:add(p,[Math.cos(P.bxA)*r,-s[1]/2+((P.bxA*0.3)%s[1]),Math.sin(P.bxA)*r]),v:[0,3,0],life:1.2,col:pick(['#c18cff','#8a5bff','#ffd1ff']),sz:3,g:0};}},
+ heat_shimmer:{rate:10,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2),s[1]/2,rnd(-s[2]/2,s[2]/2)]),v:[0,rnd(3,5),0],life:1.5,col:'#fff2dc',sz:6,g:0})},
+ leaf_fall:{rate:3,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2),-s[1]/2,rnd(-s[2]/2,s[2]/2)]),v:[rnd(-2,2),-1.5,rnd(-2,2)],life:3.5,col:pick(['#5a9a45','#7aa83a','#c8a43a']),sz:3.5,g:0.03})},
+ dust_cloud:{rate:10,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2),-s[1]/2+0.3,rnd(-s[2]/2,s[2]/2)]),v:[rnd(-4,4),rnd(0.5,2),rnd(-4,4)],life:1.8,col:pick(['#b8a588','#a8957a']),sz:10,g:0})},
+ rising_sparks:{rate:20,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2),s[1]/2,rnd(-s[2]/2,s[2]/2)]),v:[rnd(-2,2),rnd(12,20),rnd(-2,2)],life:1,col:pick(['#ffe08a','#ffb03a']),sz:2,g:0.2})},
+ poison_gas:{rate:8,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2),s[1]/2,rnd(-s[2]/2,s[2]/2)]),v:[rnd(-1,1),rnd(1,3),rnd(-1,1)],life:3,col:pick(['#7ad14a','#5ab83a','#9ae06a']),sz:14,g:-0.005})},
+ holy_light:{rate:14,mk:(p,s)=>({p:add(p,[rnd(-s[0]/2,s[0]/2),s[1]/2+rnd(0,8),rnd(-s[2]/2,s[2]/2)]),v:[0,-2,0],life:2,col:pick(['#fff6c4','#ffffff','#ffe9a8']),sz:3,g:0})},
+ music_burst:{rate:3,mk:(p,s)=>({p:add(p,[0,s[1]/2,0]),v:[rnd(-3,3),rnd(4,6),rnd(-3,3)],life:2,col:pick(['#ff7ad1','#7ad1ff','#ffd27a']),sz:6,g:-0.02})},
+};
+function emitFx(P,dt){const f=P.bxfx;const D=FX[f.kind];if(!D)return;f.t+=dt*D.rate*(f.amt||1);while(f.t>=1){f.t-=1;const q=D.mk(P.st.Position,P.st.Size,P);q.t=0;G.particles.push(q);}if(G.particles.length>2500)G.particles.splice(0,G.particles.length-2500);}
+const EF=(name,kind,help)=>ADD('Effects',name,help,'#'+name,(c,a)=>{const P=c&&c.P;if(!P||P.kind!=='part')return;P.bxfx={kind,t:0,amt:a?Math.max(0.1,Math.min(5,nm(a,1))):1};},{tg:true});
+EF('water_spray','spray','sprays water up and out like a sprinkler');EF('embers','embers','glowing embers drift up');EF('flame','flame','a small flickering flame on top');EF('steam_vent','steam','white steam puffs up');EF('sparkler','sparkler','throws off bright sparkler sparks');EF('smoke_column','smoke_column','a tall column of dark smoke');EF('drip','drip','water drips from underneath');EF('fog_puffs','fog_puffs','low fog rolls off it');EF('electric_crackle','electric','crackles with electricity');EF('sand_fall','sand_fall','sand pours out from underneath');EF('snow_drift','snow_drift','snow falls around it');EF('fountain_jet','fountain_jet','shoots a tall jet of water');EF('bubbles_up','bubbles_up','bubbles rise from it');EF('magic_swirl','magic_swirl','sparkles swirl around it');EF('heat_shimmer','heat_shimmer','hot air rises from it');EF('leaf_fall','leaf_fall','leaves fall from underneath, like a tree');EF('dust_cloud','dust_cloud','dust kicks up around its base');EF('rising_sparks','rising_sparks','sparks fly up from it');EF('poison_gas','poison_gas','green gas seeps out of it');EF('holy_light','holy_light','soft light falls down onto it');EF('music_notes_burst','music_burst','little notes float out');
+ADD('Effects','stop_part_effects','stops these looping effects','#stop_part_effects',(c)=>{if(c&&c.P)c.P.bxfx=null;},{tg:true});
+const burst=(p,n,f)=>{for(let i=0;i<n;i++){const q=f(i);q.t=0;q.p=q.p||p.slice();G.particles.push(q);}};
+const sph=(s)=>{const a=Math.random()*6.283,b=Math.acos(rnd(-1,1));return [Math.cos(a)*Math.sin(b)*s,Math.cos(b)*s,Math.sin(a)*Math.sin(b)*s];};
+const BU=(name,help,f)=>ADD('Effects',name,help,'#'+name,(c)=>{if(G)f(ownerPos(c));},{tg:true});
+BU('burst_sparks','a shower of hot sparks',p=>{burst(p,40,()=>({v:add(sph(30),[0,10,0]),life:0.7,col:pick(['#ffe08a','#ffb03a','#fff6c4']),sz:2.5,g:1}));sfx('zap');});
+BU('burst_smoke','a puff of grey smoke',p=>burst(p,18,()=>({v:sph(6),life:1.6,col:pick(['#8a8d92','#a3a6ab','#6e7074']),sz:14,g:-0.02})));
+BU('burst_dust','a cloud of dust',p=>burst(p,24,()=>({v:[rnd(-12,12),rnd(1,5),rnd(-12,12)],life:1.2,col:pick(['#b8a588','#c9b699']),sz:10,g:0.05})));
+BU('burst_feathers','feathers flutter everywhere',p=>burst(p,22,()=>({v:add(sph(12),[0,8,0]),life:2.5,col:pick(['#ffffff','#f2ece0']),sz:4,g:0.08})));
+BU('burst_glass','glass shards shatter out',p=>{burst(p,30,()=>({v:add(sph(26),[0,12,0]),life:1,col:pick(['#cfefff','#ffffff','#a8d8ff']),sz:3,g:1}));sfx('glass_break'in SFX?'glass_break':'pop');});
+BU('burst_coins','coins pop out',p=>{burst(p,20,()=>({v:[rnd(-10,10),rnd(25,35),rnd(-10,10)],life:1.4,col:pick(['#f5c542','#ffd86a']),sz:4,g:1}));sfx('coin');});
+BU('burst_hearts','hearts float out',p=>burst(p,14,()=>({v:[rnd(-5,5),rnd(6,12),rnd(-5,5)],life:1.6,col:pick(['#ff5a8a','#ff8ab0']),sz:5,g:-0.02})));
+BU('burst_stars','stars twinkle out',p=>burst(p,26,()=>({v:sph(18),life:1,col:pick(['#fff3a0','#ffffff','#ffd84a']),sz:3,g:0})));
+BU('burst_snowflakes','snowflakes puff out',p=>burst(p,30,()=>({v:sph(10),life:2,col:'#ffffff',sz:3,g:0.06})));
+BU('burst_bubbles','bubbles pop out',p=>burst(p,24,()=>({v:sph(8),life:1.6,col:'#d6f0ff',sz:5,g:-0.05})));
+BU('burst_splash','a big water splash',p=>{burst(p,40,()=>({v:[rnd(-14,14),rnd(18,32),rnd(-14,14)],life:1.1,col:pick(['#9fd4ff','#cfeaff','#ffffff']),sz:3.5,g:1}));sfx('splash');});
+BU('burst_lava','molten blobs spit out',p=>burst(p,22,()=>({v:[rnd(-12,12),rnd(20,34),rnd(-12,12)],life:1.4,col:pick(['#ff5a1f','#ff9a2a','#ffcf5a']),sz:5,g:1})));
+BU('burst_magic','a ring of magic sparkles',p=>{burst(p,36,(i)=>{const a=i/36*6.283;return {v:[Math.cos(a)*16,rnd(2,6),Math.sin(a)*16],life:1,col:pick(['#c18cff','#8a5bff','#ffd1ff']),sz:3,g:0};});sfx('magic'in SFX?'magic':'pop');});
+BU('burst_electric','a crackling electric burst',p=>{burst(p,30,()=>({v:sph(40),life:0.25,col:pick(['#9be7ff','#ffffff']),sz:2.5,g:0}));sfx('zap');});
+BU('burst_petals','pink petals scatter',p=>burst(p,26,()=>({v:add(sph(10),[0,6,0]),life:2.4,col:pick(['#ffc4d6','#ffe0ea','#ff9ab8']),sz:3.5,g:0.06})));
+BU('burst_ice','ice shards burst out',p=>burst(p,26,()=>({v:add(sph(22),[0,10,0]),life:0.9,col:pick(['#bfeaff','#e8f8ff','#8fd0ff']),sz:3.5,g:1})));
+BU('burst_rocks','rocks and pebbles fly out',p=>burst(p,22,()=>({v:add(sph(20),[0,14,0]),life:1.3,col:pick(['#7d7a74','#8a867d','#5f5c57']),sz:4,g:1})));
+BU('burst_flames','a burst of flames',p=>{burst(p,30,()=>({v:add(sph(12),[0,10,0]),life:0.7,col:pick(['#ffcf5a','#ff9a2a','#ff5a1f']),sz:7,g:-0.1}));sfx('whoosh');});
+BU('burst_leaves','leaves burst out like a shaken bush',p=>burst(p,24,()=>({v:add(sph(12),[0,6,0]),life:2.2,col:pick(['#4b8b3b','#5a9a45','#7aa83a']),sz:4,g:0.08})));
+BU('burst_confetti_cannon','confetti shoots straight up',p=>{burst(p,70,()=>({v:[rnd(-6,6),rnd(45,65),rnd(-6,6)],life:3,col:pick(['#ff3b3b','#ffd23f','#3dd16b','#3d8bff','#b480ff']),sz:4,g:0.6}));sfx('pop');});
+BU('burst_ink','a dark ink cloud',p=>burst(p,20,()=>({v:sph(7),life:2,col:pick(['#1d1f2a','#2a2440','#151520']),sz:16,g:0})));
+BU('burst_gold_dust','glittering gold dust',p=>burst(p,40,()=>({v:sph(9),life:2,col:pick(['#ffd84a','#ffe8a0','#e0b84a']),sz:2,g:0.05})));
+BU('burst_poof','a cartoon poof cloud',p=>{burst(p,16,(i)=>{const a=i/16*6.283;return {v:[Math.cos(a)*9,rnd(-1,3),Math.sin(a)*9],life:0.8,col:'#f2f2f2',sz:16,g:0};});sfx('pop');});
+BU('burst_ring_of_fire','a ring of fire spreads out on the ground',p=>{burst(p,48,(i)=>{const a=i/48*6.283;return {p:add(p,[0,0.5,0]),v:[Math.cos(a)*24,1,Math.sin(a)*24],life:0.9,col:pick(['#ff9a2a','#ff5a1f']),sz:8,g:0};});G.rings.push({p:p.slice(),t:0,col:'#ff8a2a',r:22});});
+
+/* ======================= physics links ======================= */
+const LINKS=[];
+const PK=(name,help,ex,fn)=>ADD('Physics',name,help,ex,(c,a)=>{const P=c&&c.P;if(!P||P.kind!=='part'||!P.alive)return;fn(P,a,c);},{tg:true});
+const anchorOf=(a,c)=>{const t=targets(key(String(a||'').split(':')[0]).replace(/\s+/g,'_'),c);if(t&&t.p&&t.p[0])return {P:t.p[0]};if(t&&t.h&&t.h[0])return {h:t.h[0]};const v=parseVec(String(a||'').split(':')[0],null);return v?{pt:v}:null;};
+const posA=A=>A.P?A.P.st.Position:A.h?add(A.h.pos,[0,2.5*A.h.size,0]):A.pt;
+PK('rope_to','hangs on a rope from a part, person or point (target : length)','#rope_to = Ceiling : 10',(P,a,c)=>{const A=anchorOf(a,c);if(!A)return;makeDynamic(P);const L=nm(String(a).split(':')[1],len(sub(posA(A),P.st.Position)));LINKS.push({P,A,L,kind:'rope'});});
+PK('spring_to','is pulled back to a part like on a spring (target : stiffness)','#spring_to = Post : 8',(P,a,c)=>{const A=anchorOf(a,c);if(!A)return;makeDynamic(P);const k=nm(String(a).split(':')[1],8);LINKS.push({P,A,L:len(sub(posA(A),P.st.Position)),k,kind:'spring'});});
+PK('rod_to','is held at a fixed distance from something, like a stick','#rod_to = Pivot',(P,a,c)=>{const A=anchorOf(a,c);if(!A)return;makeDynamic(P);LINKS.push({P,A,L:len(sub(posA(A),P.st.Position)),kind:'rod'});});
+PK('magnet_to','is pulled toward a part, person or point (target : strength)','#magnet_to = Magnet : 60',(P,a,c)=>{const A=anchorOf(a,c);if(!A)return;makeDynamic(P);LINKS.push({P,A,k:nm(String(a).split(':')[1],60),kind:'pull'});});
+PK('push_away_from','is pushed away from something (target : strength)','#push_away_from = player : 60',(P,a,c)=>{const A=anchorOf(a,c);if(!A)return;makeDynamic(P);LINKS.push({P,A,k:-nm(String(a).split(':')[1],60),kind:'pull'});});
+PK('homing','chases the player as a physics object','#homing = 40',(P,a)=>{makeDynamic(P);LINKS.push({P,A:{h:G.player},k:nm(a,40),kind:'home'});});
+PK('unlink','removes ropes, springs and pulls from this part','#unlink',(P)=>{for(let i=LINKS.length-1;i>=0;i--)if(LINKS[i].P===P)LINKS.splice(i,1);});
+PK('gravity_well','pulls loose parts nearby toward it (range : strength)','#gravity_well = 30 : 80',(P,a)=>{const [r,k]=String(a).split(':');P.bxWell={r:nm(r,30),k:nm(k,80)};});
+PK('anti_gravity_field','loose parts nearby float upward (range)','#anti_gravity_field = 20',(P,a)=>{P.bxLift={r:nm(a,20)};});
+PK('air_drag','slows down as it moves through the air (0 to 5)','#air_drag = 1',(P,a)=>{makeDynamic(P);P.bxDrag=Math.max(0,nm(a,1));});
+PK('max_speed','can never go faster than this','#max_speed = 50',(P,a)=>{makeDynamic(P);P.bxMax=Math.max(0.1,nm(a,50));});
+PK('bounce_forever','bounces without losing any speed','#bounce_forever',(P)=>{P.st.Elasticity=1;P.st.Friction=0;makeDynamic(P);});
+PK('stick_on_hit','sticks in place on the first thing it hits','#stick_on_hit',(P)=>{makeDynamic(P);P.bxStick=1;});
+PK('shatter_on_hit','breaks apart when it hits something hard','#shatter_on_hit = 40',(P,a)=>{makeDynamic(P);P.bxShatter=nm(a,40);});
+PK('explode_on_hit','explodes when it hits something hard','#explode_on_hit = 30',(P,a)=>{makeDynamic(P);P.bxBoom=nm(a,30);});
+PK('throw_at_player','throws itself in an arc at the player','#throw_at_player',(P)=>{makeDynamic(P);const d=sub(G.player.pos,P.st.Position);const t=Math.max(0.6,len(d)/50);P.vel=[d[0]/t,d[1]/t+0.5*G.gravity*t*0.5,d[2]/t];P.sleep=0;});
+PK('launch_toward','launches itself at a part or person (target : speed)','#launch_toward = Goal : 80',(P,a,c)=>{const A=anchorOf(a,c);if(!A)return;makeDynamic(P);P.vel=mul(norm(sub(posA(A),P.st.Position)),nm(String(a).split(':')[1],80));P.sleep=0;});
+PK('random_push','gives itself a random shove','#random_push = 40',(P,a)=>{makeDynamic(P);const s=nm(a,40);P.vel=add(P.vel,[rnd(-s,s),rnd(0,s),rnd(-s,s)]);P.sleep=0;});
+PK('stop_dead','stops moving and spinning right away','#stop_dead',(P)=>{if(P.dyn){P.vel=[0,0,0];P.w=[0,0,0];}});
+PK('buoyant','floats on water parts','#buoyant',(P)=>{makeDynamic(P);P.bxFloat=1;});
+function linkStep(dt){for(let i=LINKS.length-1;i>=0;i--){const L=LINKS[i];const P=L.P;if(!P.alive||!P.dyn||(L.A.P&&!L.A.P.alive)){LINKS.splice(i,1);continue;}const a=posA(L.A);const d=sub(P.st.Position,a);const D=len(d)||1e-6;const n=mul(d,1/D);P.sleep=0;
+  if(L.kind==='rope'||L.kind==='rod'){if(D>L.L||L.kind==='rod'){P.st.Position=add(a,mul(n,L.L));const vr=dot(P.vel,n);if(L.kind==='rod'||vr>0)P.vel=sub(P.vel,mul(n,vr));}}
+  else if(L.kind==='spring'){P.vel=add(P.vel,mul(n,-(D-L.L)*L.k*dt));P.vel=mul(P.vel,1-Math.min(0.5,dt*0.8));}
+  else if(L.kind==='pull'){if(D>0.5)P.vel=add(P.vel,mul(n,-L.k*dt*(L.k>0?1:Math.min(1,30/D))));}
+  else if(L.kind==='home'){const want=mul(n,-L.k);P.vel=add(mul(P.vel,1-Math.min(1,dt*2)),mul(want,Math.min(1,dt*2)));P.vel[1]+=G.gravity*dt*0.9;}}
+ G.parts.forEach(W=>{if(!W.alive)return;if(W.bxWell||W.bxLift){G.bodies.forEach(Q=>{if(Q===W||!Q.alive)return;const d=sub(W.st.Position,Q.st.Position);const D=len(d);if(W.bxWell&&D<W.bxWell.r&&D>0.5){Q.vel=add(Q.vel,mul(d,W.bxWell.k*dt/D));Q.sleep=0;}if(W.bxLift&&D<W.bxLift.r){Q.vel[1]+=G.gravity*1.15*dt;Q.sleep=0;}});}});
+ G.bodies.forEach(Q=>{if(!Q.alive)return;if(Q.bxDrag)Q.vel=mul(Q.vel,Math.max(0,1-Q.bxDrag*dt));if(Q.bxMax){const s=len(Q.vel);if(s>Q.bxMax)Q.vel=mul(Q.vel,Q.bxMax/s);}
+  const sp=len(Q.vel);const prev=Q.bxPrevSp||0;Q.bxPrevSp=sp;const jolt=prev-sp;
+  if(Q.bxStick&&prev>8&&jolt>prev*0.5){Q.dyn=false;Q.vel=[0,0,0];G.bodies=G.bodies.filter(b=>b!==Q);Q.bxStick=0;}
+  if(Q.bxShatter&&jolt>Q.bxShatter){try{shatterPart(Q);}catch(e){Q.alive=false;}}
+  if(Q.bxBoom&&jolt>Q.bxBoom){Q.alive=false;explodeAt(Q.st.Position.slice(),12);}
+  if(Q.bxFloat){G.parts.forEach(Wt=>{if(!Wt.alive||!Wt.f||!Wt.f.water)return;const s=Wt.st;if(Math.abs(Q.st.Position[0]-s.Position[0])<s.Size[0]/2&&Math.abs(Q.st.Position[2]-s.Position[2])<s.Size[2]/2){const surf=s.Position[1]+s.Size[1]/2;const depth=surf-Q.st.Position[1];if(depth>-Q.st.Size[1]/2&&depth<s.Size[1]){Q.vel[1]+=G.gravity*dt*(1+Math.min(2,depth))*1.1;Q.vel=mul(Q.vel,1-dt*1.5);}}});}});}
+
+/* ======================= lights ======================= */
+const LT=(name,help,ex,fn)=>ADD('Lights',name,help,ex,(c,a)=>{const P=c&&c.P;if(!P)return;P.light=P.light||{r:20,col:P.kind==='part'?P.st.Color:'#ffffff'};fn(P,a,P.light);},{tg:true});
+LT('light_color','changes the color of its light','#light_color = orange',(P,a,L)=>{L.col=COLOR_HEX(colorArg(a||'white'));L.base=L.col;});
+LT('light_range','how far its light reaches','#light_range = 40',(P,a,L)=>{L.r=Math.max(1,nm(a,20));L.r0=L.r;});
+LT('light_off','turns its light off','#light_off',(P,a,L)=>{L.off=L.r||20;L.r=0;});
+LT('light_on','turns its light back on','#light_on',(P,a,L)=>{if(L.off){L.r=L.off;L.off=0;}});
+LT('candle_flicker','its light flickers softly like a candle','#candle_flicker',(P,a,L)=>{L.mode='candle';L.r0=L.r0||L.r;});
+LT('strobe_light','its light flashes on and off fast','#strobe_light = 8',(P,a,L)=>{L.mode='strobe';L.hz=nm(a,8);L.r0=L.r0||L.r;});
+LT('police_lights','its light swaps between red and blue','#police_lights',(P,a,L)=>{L.mode='police';L.r0=L.r0||L.r;});
+LT('disco_light','its light cycles through colors','#disco_light',(P,a,L)=>{L.mode='disco';L.r0=L.r0||L.r;});
+LT('breathing_light','its light slowly fades up and down','#breathing_light',(P,a,L)=>{L.mode='breathe';L.r0=L.r0||L.r;});
+LT('broken_light','its light buzzes and cuts out now and then','#broken_light',(P,a,L)=>{L.mode='broken';L.r0=L.r0||L.r;});
+LT('light_when_dark','its light only turns on at night','#light_when_dark',(P,a,L)=>{L.mode='night';L.r0=L.r0||L.r;});
+LT('light_when_near','its light turns on when the player comes close','#light_when_near = 15',(P,a,L)=>{L.mode='near';L.near=nm(a,15);L.r0=L.r0||L.r;});
+LT('steady_light','stops any light effect','#steady_light',(P,a,L)=>{L.mode=null;if(L.r0)L.r=L.r0;if(L.base)L.col=L.base;});
+function lightStep(dt){const ls=x=>{const L=x.light;if(!L||!L.mode)return;const r0=L.r0||20;const t=G.t;const pos=x.kind==='part'?x.st.Position:x.h?x.h.pos:null;
+  if(L.mode==='candle')L.r=r0*(0.85+0.1*Math.sin(t*13)+0.05*Math.sin(t*31+1));
+  else if(L.mode==='strobe')L.r=(Math.floor(t*L.hz*2)%2)?r0:0;
+  else if(L.mode==='police'){L.col=(Math.floor(t*3)%2)?'#ff2a2a':'#2a5aff';L.r=r0;}
+  else if(L.mode==='disco'){const h=(t*0.6)%1;L.col=rgb2hex([0,1/3,2/3].map(k=>0.5+0.5*Math.cos(6.283*(h+k))));L.r=r0;}
+  else if(L.mode==='breathe')L.r=r0*(0.55+0.45*Math.sin(t*1.4));
+  else if(L.mode==='broken'){L.bk=(L.bk||0)-dt;if(L.bk<=0){L.bk=rnd(0.05,Math.random()<0.2?0.4:2);L.on=Math.random()<0.75;}L.r=L.on?r0:0;}
+  else if(L.mode==='night'){const ct=S.lighting.ClockTime;L.r=(ct<6.2||ct>18)?r0:0;}
+  else if(L.mode==='near'&&pos){L.r=len(sub(pos,G.player.pos))<L.near?r0:0;}};
+ G.parts.forEach(P=>{if(P.alive)ls(P);});}
+
+/* ======================= survival and level stats ======================= */
+const STC=(name,help,ex,fn)=>ADD('Stats',name,help,ex,null,{hum:fn,tg:true,touch:true});
+const ST=h=>h.bxS||(h.bxS={xp:0,level:1});
+const xpNeed=l=>Math.round(50*Math.pow(l,1.5));
+function giveXp(h,n){const S2=ST(h);S2.xp+=n;let up=false;while(S2.xp>=xpNeed(S2.level)){S2.xp-=xpNeed(S2.level);S2.level++;up=true;if(S2.lvlHp)h.max+=S2.lvlHp;}if(up&&h===G.player){showTitle('LEVEL '+S2.level,2);sfx('levelup'in SFX?'levelup':'win');fireAll('on_signal','level_up',h);}if(h===G.player){G.vars.xp=S2.xp;G.vars.level=S2.level;G.vars.xp_needed=xpNeed(S2.level);}}
+STC('give_xp','gives experience points; enough of them levels you up','#give_xp = toucher : 25',(c,h,a)=>giveXp(h,nm(a,10)));
+STC('set_level','sets their level','#set_level = toucher : 5',(c,h,a)=>{ST(h).level=Math.max(1,Math.round(nm(a,1)));ST(h).xp=0;if(h===G.player)G.vars.level=ST(h).level;});
+STC('health_per_level','each level up adds this much max health','#health_per_level = toucher : 10',(c,h,a)=>{ST(h).lvlHp=nm(a,10);});
+STC('xp_per_kill','they get this much experience per bot defeated','#xp_per_kill = toucher : 20',(c,h,a)=>{ST(h).xpKill=nm(a,20);});
+STC('hunger','they get hungry over time and lose health when starving (seconds to starve)','#hunger = toucher : 120',(c,h,a)=>{const S2=ST(h);S2.hunger=100;S2.hungerT=Math.max(5,TT(a)||120);});
+STC('eat','fills up their hunger','#eat = toucher : 30',(c,h,a)=>{const S2=ST(h);if(S2.hunger!=null)S2.hunger=Math.min(100,S2.hunger+nm(a,30));sfx('pop');});
+STC('thirst','they get thirsty over time and lose health when dried out (seconds)','#thirst = toucher : 90',(c,h,a)=>{const S2=ST(h);S2.thirst=100;S2.thirstT=Math.max(5,TT(a)||90);});
+STC('drink','fills up their thirst','#drink = toucher : 40',(c,h,a)=>{const S2=ST(h);if(S2.thirst!=null)S2.thirst=Math.min(100,S2.thirst+nm(a,40));sfx('splash');});
+STC('stamina','running uses stamina; when it runs out they slow down (seconds of running)','#stamina = toucher : 6',(c,h,a)=>{const S2=ST(h);S2.stam=100;S2.stamT=Math.max(1,TT(a)||6);});
+STC('restore_stamina','fills their stamina back up','#restore_stamina = toucher',(c,h)=>{if(ST(h).stam!=null)ST(h).stam=100;});
+STC('oxygen','they run out of air underwater (seconds of air)','#oxygen = toucher : 15',(c,h,a)=>{const S2=ST(h);S2.air=100;S2.airT=Math.max(2,TT(a)||15);});
+STC('cold','they get cold and lose health unless near a light (seconds to freeze)','#cold = toucher : 60',(c,h,a)=>{const S2=ST(h);S2.warm=100;S2.warmT=Math.max(5,TT(a)||60);});
+STC('warm_up','warms them back up','#warm_up = toucher : 50',(c,h,a)=>{const S2=ST(h);if(S2.warm!=null)S2.warm=Math.min(100,S2.warm+nm(a,50));});
+STC('mana','gives them a mana bar that refills over time (max : per second)','#mana = toucher : 100 : 5',(c,h,a)=>{const [m,r]=String(a).split(':');const S2=ST(h);S2.manaMax=nm(m,100);S2.mana=S2.manaMax;S2.manaRegen=nm(r,5);});
+STC('use_mana','spends mana; sends the signal no_mana if there isn\'t enough','#use_mana = toucher : 20',(c,h,a)=>{const S2=ST(h);const k=nm(a,10);if((S2.mana||0)>=k){S2.mana-=k;fireAll('on_signal','mana_used',h);}else{fireAll('on_signal','no_mana',h);if(h===G.player)toastMsg('Not enough mana');}});
+STC('strength','their hits on bots do this many times the damage','#strength = toucher : 2',(c,h,a)=>{ST(h).str=Math.max(0,nm(a,1));});
+STC('defense','they take less damage (0 to 1)','#defense = toucher : 0.3',(c,h,a)=>{ST(h).def=Math.min(0.95,Math.max(0,nm(a,0.3)));});
+const hs0=hurtHumanoid;hurtHumanoid=function(h,n){let k=n;const K=G&&G.killer;if(h&&h.bxS&&h.bxS.def)k*=1-h.bxS.def;if(K&&K.bxS&&K.bxS.str!=null&&h&&h.kind==='bot')k*=K.bxS.str;return hs0.call(this,h,k);};
+const ks0=killHumanoid;killHumanoid=function(h,why){const was=h&&h.dead;const K=G&&G.killer;ks0.apply(this,arguments);if(h&&!was&&h.dead&&K&&K!==h&&K.bxS&&K.bxS.xpKill&&h.kind==='bot')giveXp(K,K.bxS.xpKill);};
+function statsStep(dt){G.humans.forEach(h=>{const S2=h.bxS;if(!S2||h.dead)return;const hurt=d=>{G.killer=null;hs0(h,d);};
+  if(S2.hunger!=null){S2.hunger=Math.max(0,S2.hunger-100/S2.hungerT*dt);if(S2.hunger<=0)hurt(4*dt);}
+  if(S2.thirst!=null){S2.thirst=Math.max(0,S2.thirst-100/S2.thirstT*dt);if(S2.thirst<=0)hurt(5*dt);}
+  if(S2.stam!=null){const run=Math.hypot(h.vel[0],h.vel[2])>h.walk*0.6&&(h.fastT>0||(h.ab&&h.ab.sprinting)||Math.hypot(h.vel[0],h.vel[2])>h.walk*0.9);if(run)S2.stam=Math.max(0,S2.stam-100/S2.stamT*dt);else S2.stam=Math.min(100,S2.stam+100/(S2.stamT*1.5)*dt);if(S2.stam<=0)h.slowT=Math.max(h.slowT||0,0.2);}
+  if(S2.air!=null){const under=G.parts.some(P=>P.alive&&P.f&&P.f.water&&h.touchingParts&&h.touchingParts.has(P)&&(P.st.Position[1]+P.st.Size[1]/2)>h.pos[1]+3.6*h.size);if(under)S2.air=Math.max(0,S2.air-100/S2.airT*dt);else S2.air=Math.min(100,S2.air+60*dt);if(S2.air<=0)hurt(12*dt);}
+  if(S2.warm!=null){const nearLight=G.parts.some(P=>P.alive&&P.light&&P.light.r>0&&len(sub(P.st.Position,h.pos))<Math.max(8,P.light.r*0.6));if(nearLight)S2.warm=Math.min(100,S2.warm+25*dt);else S2.warm=Math.max(0,S2.warm-100/S2.warmT*dt);if(S2.warm<=0)hurt(4*dt);}
+  if(S2.mana!=null)S2.mana=Math.min(S2.manaMax,S2.mana+S2.manaRegen*dt);
+  if(h===G.player){['hunger','thirst','stam','air','warm','mana'].forEach(k=>{if(S2[k]!=null)G.vars[{stam:'stamina',warm:'warmth'}[k]||k]=Math.round(S2[k]);});}});}
+const sp0=stopPlay;stopPlay=function(){LINKS.length=0;return sp0.apply(this,arguments);};
+})();
+
+/* ================= 17. scripts are for mechanics: no building commands, and GUI is made in the GUI tab ================= */
+(function(){
+const KEEP_GUI=new Set(['print','timer_start','timer_stop','countdown','prompt','prompt_distance','click_distance','show_gui','hide_gui','toggle_gui','hide_all_guis','set_text','set_value','show_thing','hide_thing']);
+Object.keys(CMDS).forEach(n=>{const c=CMDS[n];if(c.cat==='Building'||(c.cat==='GUI'&&!KEEP_GUI.has(n)))delete CMDS[n];});
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
