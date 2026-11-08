@@ -4769,6 +4769,116 @@ function dlg(msg,{input,def,ok='OK',cancel}={}){return new Promise(res=>{const d
 window.bxAlert=m=>dlg(m);window.bxConfirm=m=>dlg(m,{ok:'OK',cancel:'Cancel'});window.bxPrompt=(m,d)=>dlg(m,{input:1,def:d,ok:'OK',cancel:'Cancel'});
 })();
 
+/* ================= 19. graphics settings: quality presets, sun shadows, resolution, detail, view distance, particles, frame rate ================= */
+(function(){
+const PRESETS={
+ Low:{scale:0.6,shadows:0,detail:0,view:450,particles:0.3,fps:30},
+ Medium:{scale:0.85,shadows:1,detail:1,view:1200,particles:0.6,fps:60},
+ High:{scale:1,shadows:2,detail:1,view:3000,particles:1,fps:60},
+ Ultra:{scale:1.35,shadows:3,detail:1,view:4000,particles:1,fps:0}};
+const isPhone=matchMedia('(pointer:coarse)').matches||innerWidth<760;
+let GX;try{GX=JSON.parse(localStorage.getItem('buildx-gfx')||'null');}catch(e){}
+if(!GX||!GX.preset)GX=Object.assign({preset:isPhone?'Medium':'High'},PRESETS[isPhone?'Medium':'High']);
+const save=()=>{try{localStorage.setItem('buildx-gfx',JSON.stringify(GX));}catch(e){}};
+window.bxGfx=GX;
+
+/* ---- resolution ---- */
+const _rs=resize;resize=function(){const r=view.getBoundingClientRect();const k=Math.max(0.35,Math.min(3,Math.min(2,window.devicePixelRatio||1)*GX.scale));
+ const W=Math.max(2,Math.round(r.width*k)),H=Math.max(2,Math.round(r.height*k));if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;}};
+
+/* ---- frame rate limit ---- */
+const _fr=frame;let lastDraw=0;frame=function(now){const cap=GX.fps;if(cap&&now-lastDraw<1000/cap-3){requestAnimationFrame(frame);return;}lastDraw=now;return _fr(now);};
+
+/* ---- material detail: Low uses plain colors (much less work for the phone's graphics chip) ---- */
+const PLAIN={};const _mp=matProg;
+const plainBody=body=>{if(/emis|discard|gl_FragColor|uTime|uPortal/.test(body))return null;return (body.match(/(spec|shin)=[0-9.]+;/g)||[]).join('');};
+matProg=function(mi){if(GX.detail)return _mp(mi);mi=Math.max(0,Math.min(FS_PARTS.bodies.length-1,Math.round(mi)));const pb=plainBody(FS_PARTS.bodies[mi]);if(pb===null)return _mp(mi);
+ if(!PLAIN[mi])PLAIN[mi]=prog(VS,FS_PARTS.head+'\n'+pb+'\n'+FS_PARTS.tail);return PLAIN[mi];};
+
+/* ---- shadows from the sun ---- */
+const SH_HEAD=`uniform sampler2D uShadow;uniform mat4 uLVP;uniform float uShadowOn,uShTexel,uShBias;
+float bxUnpack(vec4 c){return dot(c,vec4(1.,1./255.,1./65025.,1./16581375.));}
+float bxShadow(vec3 wp,vec3 nn,float ndl){if(uShadowOn<0.5)return 1.;vec4 lp=uLVP*vec4(wp+nn*0.12,1.);vec3 sc=lp.xyz/lp.w*0.5+0.5;
+ if(sc.x<=0.002||sc.x>=0.998||sc.y<=0.002||sc.y>=0.998||sc.z>=1.)return 1.;float b=uShBias*(1.+2.5*(1.-ndl));float acc=0.;
+ for(int y=-2;y<=2;y++)for(int x=-2;x<=2;x++){vec2 o=vec2(float(x),float(y))*uShTexel*(uShadowOn>2.5?0.75:1.);acc+=step(sc.z-b,bxUnpack(texture2D(uShadow,sc.xy+o)));}
+ float s=acc/25.;vec2 e=min(sc.xy,1.-sc.xy);float fade=smoothstep(0.0,0.08,min(e.x,e.y));return mix(1.,s,fade);}
+`;
+const LIGHT_OLD=' vec3 col=c*(uAmb*hemi+uSunCol*d)+uSunCol*spec*pow(max(dot(n,H),0.),shin);';
+const LIGHT_NEW=' float shd=bxShadow(vW,n,d);vec3 col=c*(uAmb*hemi*(0.82+0.18*shd)+uSunCol*d*shd)+uSunCol*spec*pow(max(dot(n,H),0.),shin)*shd;';
+let shaderOk=false;
+if(FS_PARTS.tail.includes(LIGHT_OLD)){const i=FS_PARTS.head.indexOf('void main(){');if(i>0){FS_PARTS.head=FS_PARTS.head.slice(0,i)+SH_HEAD+FS_PARTS.head.slice(i);FS_PARTS.tail=FS_PARTS.tail.replace(LIGHT_OLD,LIGHT_NEW);for(const k in MPROG)delete MPROG[k];shaderOk=true;}}
+const SDVS=`attribute vec3 aPos;uniform mat4 uM,uLVP;void main(){gl_Position=uLVP*uM*vec4(aPos,1.);}`;
+const SDFS=`precision highp float;vec4 pk(float v){vec4 e=fract(v*vec4(1.,255.,65025.,16581375.));e-=e.yzww*vec4(1./255.,1./255.,1./255.,0.);return e;}void main(){gl_FragColor=pk(gl_FragCoord.z);}`;
+let SD=null;try{SD=prog(SDVS,SDFS);}catch(e){console.error(e);}
+const FB={size:0,fb:null,tex:null,rb:null};
+const maxTex=gl.getParameter(gl.MAX_TEXTURE_SIZE)||2048;
+function shadowFB(size){size=Math.min(size,maxTex);if(FB.size===size)return FB;if(FB.fb){gl.deleteFramebuffer(FB.fb);gl.deleteTexture(FB.tex);gl.deleteRenderbuffer(FB.rb);}
+ FB.size=size;FB.tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,FB.tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,size,size,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+ [[gl.TEXTURE_MIN_FILTER,gl.NEAREST],[gl.TEXTURE_MAG_FILTER,gl.NEAREST],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]].forEach(([a,b])=>gl.texParameteri(gl.TEXTURE_2D,a,b));
+ FB.rb=gl.createRenderbuffer();gl.bindRenderbuffer(gl.RENDERBUFFER,FB.rb);gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT16,size,size);
+ FB.fb=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,FB.fb);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,FB.tex,0);gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,FB.rb);gl.bindFramebuffer(gl.FRAMEBUFFER,null);return FB;}
+function ortho(l,r,b,t,n,f){const m=new Float32Array(16);m[0]=2/(r-l);m[5]=2/(t-b);m[10]=-2/(f-n);m[12]=-(r+l)/(r-l);m[13]=-(t+b)/(t-b);m[14]=-(f+n)/(f-n);m[15]=1;return m;}
+let LVP=null,shOn=0,texel=0,bias=0;
+function shadowPass(L){shOn=0;if(!SD||!shaderOk||!GX.shadows)return;const studio=window.bxStudio&&bxStudio();if(studio)return;const Lt=lightingNow(S.lighting);const sun=norm(Lt.sun);if(sun[1]<0.06)return;
+ const lvl=GX.shadows;const size=[0,1024,2048,4096][lvl];const span=[0,90,140,190][lvl];const F=shadowFB(size);
+ const eye=EYE||camEye();const fw=norm(sub(cam.tgt,eye));const ctr=add(cam.tgt,mul([fw[0],0,fw[2]],span*0.35));
+ /* snap the centre to whole shadow texels so edges don't crawl when the camera moves */
+ const up=Math.abs(sun[1])>0.98?[0,0,1]:[0,1,0];const Vw=M4.look(add(ctr,mul(sun,400)),ctr,up);const tx=span*2/F.size;
+ const cl=M4.xf(Vw,ctr);const sx=Math.round(cl[0]/tx)*tx-cl[0],sy=Math.round(cl[1]/tx)*tx-cl[1];
+ const P=ortho(-span+sx,span+sx,-span+sy,span+sy,1,900);LVP=M4.mul(P,Vw);
+ gl.bindFramebuffer(gl.FRAMEBUFFER,F.fb);gl.viewport(0,0,F.size,F.size);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.disable(gl.BLEND);
+ gl.useProgram(SD.p);gl.uniformMatrix4fv(SD.u.uLVP,false,LVP);if(SD.a.nor>=0)gl.disableVertexAttribArray(SD.a.nor);if(SD.a.uv>=0)gl.disableVertexAttribArray(SD.a.uv);
+ L.forEach(d=>{if(d.alpha<0.35||d.noShadow||d.portal&&!d.decal)return;if(d.mat===2&&d.alpha<1)return;gl.uniformMatrix4fv(SD.u.uM,false,d.m);bindMesh(SD,d.mesh);gl.drawElements(gl.TRIANGLES,d.mesh.c,d.mesh.t,0);});
+ gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,cv.width,cv.height);
+ gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,F.tex);gl.activeTexture(gl.TEXTURE0);
+ shOn=lvl;texel=1/F.size;bias=[0,0.0016,0.0011,0.0008][lvl];}
+function setShadowUniforms(){const all=Object.values(MPROG).concat(Object.values(PLAIN));all.forEach(q=>{if(!q.u.uShadowOn)return;gl.useProgram(q.p);gl.uniform1f(q.u.uShadowOn,shOn);if(shOn){gl.uniform1i(q.u.uShadow,2);gl.uniformMatrix4fv(q.u.uLVP,false,LVP);gl.uniform1f(q.u.uShTexel,texel);gl.uniform1f(q.u.uShBias,bias);}});}
+/* draw the shadow map first, then the normal picture; the scene list is built once and reused */
+const _render=render,_dl=drawList;
+render=function(forPick,V){if(forPick||V)return _render.apply(this,arguments);let L0=null;try{L0=_dl(false);}catch(e){}
+ if(L0){try{shadowPass(L0);}catch(e){console.error(e);shOn=0;gl.bindFramebuffer(gl.FRAMEBUFFER,null);}}setShadowUniforms();
+ if(L0){drawList=f=>f?_dl(f):L0;}try{return _render.apply(this,arguments);}finally{drawList=_dl;}};
+/* programs made later (a new material showing up) pick the settings up next frame */
+
+/* ---- view distance: fog closes in on lower settings ---- */
+const _ln=lightingNow;lightingNow=function(L){const o=_ln(L);if(o&&o.fog&&GX.view<4000&&!(window.bxStudio&&bxStudio())){const far=Math.min(o.fog[1],GX.view);o.fog=[Math.min(o.fog[0],far*0.45),far];}return o;};
+
+/* ---- particles ---- */
+const seen=new WeakSet();const _gs=gameStep;gameStep=function(dt){_gs.apply(this,arguments);const A=G&&G.particles;if(!A)return;const max=Math.round(2500*GX.particles);if(A.length>max)A.splice(0,A.length-max);
+ for(let i=A.length-1;i>=0;i--){const q=A[i];if(!q||typeof q!=='object'||seen.has(q))continue;seen.add(q);if(GX.particles<1&&Math.random()>GX.particles)A.splice(i,1);}};
+
+/* ---- the controls (BuildX's own buttons) ---- */
+const css=document.createElement('style');css.textContent=`
+.gfx{display:flex;flex-direction:column;gap:9px;margin:6px 0 4px}
+.gfx .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--pn2,#262a36);border:1px solid var(--ln,#3a3f4e);border-radius:10px;padding:3px}
+.gfx .seg button{font:inherit;font-size:13px;font-weight:600;border:none;border-radius:8px;padding:8px 4px;background:transparent;color:var(--mu,#aab2c5);cursor:pointer}
+.gfx .seg button.on{background:#4a5bf0;color:#fff}
+.gfx .row{display:flex;align-items:center;gap:8px;font-size:13px}.gfx .row>span{flex:1;color:var(--tx,#e8eaf0)}.gfx .row small{display:block;color:var(--mu,#8d94a8);font-size:11px}
+.gfx .pills{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end}
+.gfx .pills button{font:inherit;font-size:12px;border:1px solid var(--ln,#3a3f4e);background:var(--pn2,#262a36);color:var(--tx,#e8eaf0);border-radius:7px;padding:5px 8px;cursor:pointer}
+.gfx .pills button.on{background:#3a4bd8;border-color:#5b6cff;color:#fff}
+.gfx .note{font-size:11px;color:var(--mu,#8d94a8)}
+#pmenu .gfx{margin-top:8px}#pmenu .gfx .seg button{font-size:12px;padding:7px 2px}`;document.head.appendChild(css);
+const ROWS=[
+ ['scale','Resolution','sharper picture costs more',[[0.6,'60%'],[0.85,'85%'],[1,'100%'],[1.35,'Extra']]],
+ ['shadows','Shadows','shadows from the sun',[[0,'Off'],[1,'Soft'],[2,'Sharp'],[3,'Best']]],
+ ['detail','Material detail','wood grain, bricks, metal shine',[[0,'Plain'],[1,'Full']]],
+ ['view','View distance','how far you can see before the fog',[[450,'Near'],[1200,'Medium'],[3000,'Far'],[4000,'Max']]],
+ ['particles','Effects','sparks, smoke, confetti',[[0.3,'Few'],[0.6,'Some'],[1,'All']]],
+ ['fps','Frame rate','lower saves battery',[[30,'30'],[60,'60'],[0,'No limit']]]];
+function apply(){save();for(const k in PLAIN)delete PLAIN[k];if(!G){try{render(false);}catch(e){}}document.querySelectorAll('.gfx').forEach(fill);}
+function fill(box){const full=box.dataset.full==='1';
+ box.innerHTML=`<div class="seg">${Object.keys(PRESETS).map(p=>`<button data-p="${p}" class="${GX.preset===p?'on':''}">${p}</button>`).join('')}</div>`+
+  (full?ROWS.map(([k,l,h,opts])=>`<div class="row"><span>${l}<small>${h}</small></span><div class="pills">${opts.map(([v,t])=>`<button data-k="${k}" data-v="${v}" class="${GX[k]===v?'on':''}">${t}</button>`).join('')}</div></div>`).join('')+`<div class="note">${GX.preset==='Custom'?'Custom settings. ':''}Graphics are saved on this device, not in the game.</div>`:'');
+ box.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{Object.assign(GX,PRESETS[b.dataset.p],{preset:b.dataset.p});apply();});
+ box.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{GX[b.dataset.k]=+b.dataset.v;GX.preset=Object.keys(PRESETS).find(p=>ROWS.every(([k])=>PRESETS[p][k]===GX[k]))||'Custom';apply();});}
+const _os=openSettings;openSettings=function(){_os.apply(this,arguments);const b=$('setbody');if(!b||b.querySelector('.gfx'))return;const h=document.createElement('h3');h.textContent='Graphics';const box=document.createElement('div');box.className='gfx';box.dataset.full='1';
+ const firstH=b.querySelector('h3');if(firstH){b.insertBefore(h,firstH);b.insertBefore(box,firstH);}else{b.append(h,box);}fill(box);};
+const pm=$('pmenu');if(pm){const h=document.createElement('b');h.style.cssText='color:#fff;display:block;margin-top:10px';h.textContent='Graphics';const box=document.createElement('div');box.className='gfx';box.dataset.full='0';const st=$('pm_reset');if(st){st.before(h,box);}else pm.append(h,box);fill(box);}
+window.bxGfxDbg=()=>({shOn,size:FB.size,shaderOk,sd:!!SD});
+window.bxGfxSet=p=>{if(PRESETS[p]){Object.assign(GX,PRESETS[p],{preset:p});apply();}};
+})();
+
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
 function init(){if(!load())defaultPlace();lastSnap=snapState();bind();let dv=null;try{dv=localStorage.getItem('buildx-device');}catch(e){}setDevice(dv||(matchMedia('(pointer:coarse)').matches?'mob':'pc'));if(!dv)$('devpick').style.display='flex';applySettings();refreshToolbox();refreshAll();out('👋 Welcome to BuildX! '+Object.keys(CMDS).length+' commands, '+CATALOG.length+' things to insert. Press ▶ Play to test.');startIcons();requestAnimationFrame(frame);}
 
