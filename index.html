@@ -2281,7 +2281,7 @@ render=function(forPick,V){
  const useMat=mi=>{const q=matProg(mi);if(q===PR)return;PR=q;gl.useProgram(PR.p);gl.uniformMatrix4fv(PR.u.uVP,false,vp);gl.uniform3fv(PR.u.uSun,sunN);gl.uniform3fv(PR.u.uSunCol,sunC);gl.uniform3fv(PR.u.uEye,eye);gl.uniform3fv(PR.u.uFog,fogC);gl.uniform1f(PR.u.uFogN,Lt.fog[0]);gl.uniform1f(PR.u.uFogF,Lt.fog[1]);
   gl.uniform3fv(PR.u.uAmb,ambC);gl.uniform1f(PR.u.uTime,tNow);gl.uniform1i(PR.u.uTex,0);if(PR.u.uPTex)gl.uniform1i(PR.u.uPTex,1);gl.uniform3f(PR.u.uFT,1,0,0);};
  const opq=L.filter(d=>d.alpha>=0.999).sort((a,b)=>a.mat-b.mat),tr=L.filter(d=>d.alpha<0.999).map(d=>({d,z:len(sub([d.m[12],d.m[13],d.m[14]],eye))})).sort((a,b)=>b.z-a.z).map(x=>x.d);
- const one=d=>{useMat(d.mat);gl.uniformMatrix4fv(PR.u.uM,false,d.m);gl.uniformMatrix3fv(PR.u.uN,false,M4.nrm(d.m));gl.uniform3fv(PR.u.uCol,d.flash?[1,1,1]:hex2rgb(d.col));gl.uniform1f(PR.u.uMat,d.mat);gl.uniform1f(PR.u.uAlpha,d.alpha);gl.uniform1f(PR.u.uFace,d.face?1:0);
+ const one=d=>{useMat(d.mat);gl.uniformMatrix4fv(PR.u.uM,false,d.m);gl.uniformMatrix3fv(PR.u.uN,false,M4.nrm(d.m));gl.uniform3fv(PR.u.uCol,d.flash?[1,1,1]:hex2rgb(d.col));gl.uniform1f(PR.u.uMat,d.mat);gl.uniform1f(PR.u.uAlpha,d.alpha);gl.uniform1f(PR.u.uFace,d.face===2?2:d.face?1:0);
   if(d.face){gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,d.tex||faceTex);}
   if(PR.u.uPortal){if(d.portal){const T=PORT[d.portal];gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,T&&T.ready&&curPortal!==d.portal?T.tex:blackTex);gl.activeTexture(gl.TEXTURE0);gl.uniform1f(PR.u.uPortal,T||!d.decal?1:0);const ps=d.psides||[[0,0,1],[0,0,1]];if(PR.u.uPSA){gl.uniform3fv(PR.u.uPSA,ps[0]);gl.uniform3fv(PR.u.uPSB,ps[1]);}if(PR.u.uPDecal)gl.uniform1f(PR.u.uPDecal,d.decal?1:0);}else gl.uniform1f(PR.u.uPortal,0);}
   gl.uniform1f(PR.u.uRefl,d.refl||0);gl.uniform1f(PR.u.uGlow,d.glow||0);gl.uniform3fv(PR.u.uSize,d.size||[1,1,1]);gl.uniform1f(PR.u.uSel,d.sel?1:0);bindMesh(PR,d.mesh);if(d.inv){gl.enable(gl.CULL_FACE);gl.cullFace(gl.FRONT);}gl.drawElements(gl.TRIANGLES,d.mesh.c,d.mesh.t,0);if(d.inv)gl.disable(gl.CULL_FACE);};
@@ -4835,7 +4835,7 @@ function shadowPass(L){shOn=0;if(!SD||!shaderOk||!GX.shadows)return;const studio
 function setShadowUniforms(){const all=Object.values(MPROG).concat(Object.values(PLAIN));all.forEach(q=>{if(!q.u.uShadowOn)return;gl.useProgram(q.p);gl.uniform1f(q.u.uShadowOn,shOn);if(shOn){gl.uniform1i(q.u.uShadow,2);gl.uniformMatrix4fv(q.u.uLVP,false,LVP);gl.uniform1f(q.u.uShTexel,texel);gl.uniform1f(q.u.uShBias,bias);}});}
 /* draw the shadow map first, then the normal picture; the scene list is built once and reused */
 const _render=render,_dl=drawList;
-render=function(forPick,V){if(forPick||V)return _render.apply(this,arguments);let L0=null;try{L0=_dl(false);}catch(e){}
+render=function(forPick,V){if(forPick||V)return _render.apply(this,arguments);const _dl=drawList;let L0=null;try{L0=_dl(false);}catch(e){}
  if(L0){try{shadowPass(L0);}catch(e){console.error(e);shOn=0;gl.bindFramebuffer(gl.FRAMEBUFFER,null);}}setShadowUniforms();
  if(L0){drawList=f=>f?_dl(f):L0;}try{return _render.apply(this,arguments);}finally{drawList=_dl;}};
 /* programs made later (a new material showing up) pick the settings up next frame */
@@ -5311,6 +5311,128 @@ window.bxSpawnPos=function(sp,c0,half,top){
    const u=(Math.random()*2-1)*B.h[0],w=(Math.random()*2-1)*B.h[2];p=add(add(B.c,mul(B.ax[0],u)),mul(B.ax[2],w));p[1]=B.c[1]-B.h[1]+1.5;}
   else p=[c0[0]+(Math.random()*2-1)*half[0],top+2,c0[2]+(Math.random()*2-1)*half[1]];
   if(!exceptHit(p,sp.except))return p;}return null;};
+})();
+
+/* ================= 24. Mesh parts: drag points to make any shape, add/delete points, textures (template sheet, import, make with shapes) ================= */
+(function(){
+/* ---- textures are lit like normal colors (uFace = 2 means "this part has a texture") ---- */
+(function(){const A=' if(uFace>0.5){vec2 fc';if(FS_PARTS.head.includes(A)){FS_PARTS.head=FS_PARTS.head.replace(A,' if(uFace>1.5){vec4 tx=texture2D(uTex,vUv);c=mix(c,tx.rgb,tx.a);}\n if(uFace>0.5&&uFace<1.5){vec2 fc');for(const k in MPROG)delete MPROG[k];}})();
+
+/* ---- the default mesh: a cube with 3x3 points on every side ---- */
+function cubeMesh(n){n=n||2;const v=[],t=[],key={};const P=(x,y,z)=>{const k=[x,y,z].map(a=>Math.round(a*1000)).join(',');if(key[k]==null){key[k]=v.length;v.push([x,y,z]);}return key[k];};
+ const faces=[[[1,0,0],[0,0,-1],[0,1,0]],[[-1,0,0],[0,0,1],[0,1,0]],[[0,1,0],[1,0,0],[0,0,-1]],[[0,-1,0],[1,0,0],[0,0,1]],[[0,0,1],[1,0,0],[0,1,0]],[[0,0,-1],[-1,0,0],[0,1,0]]];
+ faces.forEach(([N,U,V])=>{const id=[];for(let j=0;j<=n;j++){id.push([]);for(let i=0;i<=n;i++){const a=i/n-0.5,b=j/n-0.5;id[j].push(P(N[0]*0.5+U[0]*a+V[0]*b,N[1]*0.5+U[1]*a+V[1]*b,N[2]*0.5+U[2]*a+V[2]*b));}}
+  for(let j=0;j<n;j++)for(let i=0;i<n;i++){t.push([id[j][i],id[j][i+1],id[j+1][i+1]]);t.push([id[j][i],id[j+1][i+1],id[j+1][i]]);}});
+ return {v,t};}
+const DEF=cubeMesh(2);
+const meshOf=p=>p.Mesh&&p.Mesh.v&&p.Mesh.t?p.Mesh:DEF;
+
+/* ---- texture sheet: a cross of 6 squares (top / left front right back / bottom). Each triangle uses the square its side faces ---- */
+const CELL={'+y':[1,0],'-x':[0,1],'+z':[1,1],'+x':[2,1],'-z':[3,1],'-y':[1,2]};const SW=1024,SH=768;
+function sideOf(n){const a=n.map(Math.abs);if(a[0]>=a[1]&&a[0]>=a[2])return n[0]>0?'+x':'-x';if(a[1]>=a[2])return n[1]>0?'+y':'-y';return n[2]>0?'+z':'-z';}
+function bounds(M){const mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9];M.v.forEach(p=>p.forEach((x,i)=>{mn[i]=Math.min(mn[i],x);mx[i]=Math.max(mx[i],x);}));return {mn,mx,sz:mx.map((x,i)=>Math.max(1e-4,x-mn[i]))};}
+function uvOf(p,side,B){const q=p.map((x,i)=>(x-B.mn[i])/B.sz[i]);/* 0..1 inside the bounding box */
+ const [cx,cy]=CELL[side];let u,v;
+ if(side==='+x'){u=1-q[2];v=1-q[1];}else if(side==='-x'){u=q[2];v=1-q[1];}else if(side==='+z'){u=q[0];v=1-q[1];}else if(side==='-z'){u=1-q[0];v=1-q[1];}else if(side==='+y'){u=q[0];v=q[2];}else{u=q[0];v=1-q[2];}
+ const pad=0.02;u=pad+u*(1-2*pad);v=pad+v*(1-2*pad);return [(cx+u)*256/SW,(cy+v)*256/SH];}
+const TRI=M=>M.t.map(tr=>{const a=M.v[tr[0]],b=M.v[tr[1]],c=M.v[tr[2]];if(!a||!b||!c)return null;let n=cross(sub(b,a),sub(c,a));const ctr=[(a[0]+b[0]+c[0])/3,(a[1]+b[1]+c[1])/3,(a[2]+b[2]+c[2])/3];return {a,b,c,n,ctr};}).filter(Boolean);
+/* build the GPU mesh (flat shaded, each triangle gets its own normal) */
+const GCACHE=new Map();
+function glMesh(M){const k=JSON.stringify(M);let g=GCACHE.get(k);if(g)return g;const P=[],N=[],U=[],I=[];const B=bounds(M);
+ /* make every triangle face outward (away from the middle) */const mid=[0,1,2].map(i=>(B.mn[i]+B.mx[i])/2);
+ TRI(M).forEach(T=>{let {a,b,c,n}=T;if(dot(n,sub(T.ctr,mid))<0){[b,c]=[c,b];n=mul(n,-1);}const nn=norm(n);const side=sideOf(nn);const s=P.length/3;[a,b,c].forEach(p=>{P.push(...p);N.push(...nn);U.push(...uvOf(p,side,B));});I.push(s,s+1,s+2);});
+ if(!I.length){g=GEO.Block;}else g=mesh(P,N,U,I);GCACHE.set(k,g);if(GCACHE.size>80){GCACHE.delete(GCACHE.keys().next().value);}return g;}
+const TCACHE={};
+function texOf(url){if(TCACHE[url])return TCACHE[url];const t=gl.createTexture();TCACHE[url]=t;gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,255,255,255]));
+ const im=new Image();im.onload=()=>{gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,im);[[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]].forEach(([a,b])=>gl.texParameteri(gl.TEXTURE_2D,a,b));};im.src=url;return t;}
+GEO.Mesh=glMesh(DEF);if(!SHAPES.includes('Mesh'))SHAPES.push('Mesh');
+/* swap in each mesh part's own shape (and texture) when the scene is drawn */
+const _dl=drawList;drawList=function(forPick){const L=_dl.apply(this,arguments);L.forEach(d=>{const r=pickTable[d.pid-1];const p=r&&(r.o?r.o.props:r.P?r.P.st:null);if(!p)return;
+ if(p.Shape==='Mesh'){d.mesh=glMesh(meshOf(p));if(p.Texture&&!forPick){d.face=2;d.tex=texOf(p.Texture);}}});return L;};
+/* the old one-line face switch only knows on/off: let it pass 2 through */
+
+/* ---------- texture sheet template (what goes where) ---------- */
+function templateCanvas(M){const c=document.createElement('canvas');c.width=SW;c.height=SH;const x=c.getContext('2d');x.fillStyle='#1b1d22';x.fillRect(0,0,SW,SH);
+ const NAMES={'+y':'TOP','-x':'LEFT','+z':'FRONT','+x':'RIGHT','-z':'BACK','-y':'BOTTOM'};
+ Object.entries(CELL).forEach(([k,[cx,cy]])=>{x.fillStyle=['#e9e4d8','#dfe8e1','#e3e2ee','#eee1df','#e6ebd9','#e0e6ef'][Object.keys(CELL).indexOf(k)];x.fillRect(cx*256+2,cy*256+2,252,252);x.fillStyle='rgba(0,0,0,.28)';x.font='700 22px system-ui,sans-serif';x.textAlign='center';x.fillText(NAMES[k],cx*256+128,cy*256+30);});
+ const B=bounds(M);const mid=[0,1,2].map(i=>(B.mn[i]+B.mx[i])/2);x.strokeStyle='rgba(30,40,70,.55)';x.lineWidth=1.5;
+ TRI(M).forEach(T=>{let {a,b,c:cc,n}=T;if(dot(n,sub(T.ctr,mid))<0)n=mul(n,-1);const side=sideOf(norm(n));const q=[a,b,cc].map(p=>uvOf(p,side,B));x.beginPath();x.moveTo(q[0][0]*SW,q[0][1]*SH);x.lineTo(q[1][0]*SW,q[1][1]*SH);x.lineTo(q[2][0]*SW,q[2][1]*SH);x.closePath();x.stroke();});
+ return c;}
+function downloadTemplate(o){const c=templateCanvas(meshOf(o.props));const a=document.createElement('a');a.download=(o.name||'mesh')+'-texture-template.png';a.href=c.toDataURL('image/png');document.body.appendChild(a);a.click();a.remove();toastEd('Texture template saved. Paint on it, then press Import.');}
+function importTexture(o){const f=document.createElement('input');f.type='file';f.accept='image/*';f.onchange=()=>{const file=f.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=SW;c.height=SH;c.getContext('2d').drawImage(im,0,0,SW,SH);o.props.Texture=c.toDataURL('image/jpeg',0.9);delete o.props.TexShapes;commit();refreshProps();};im.onerror=()=>bxAlert('That file is not a picture BuildX can open.');im.src=r.result;};r.readAsDataURL(file);};f.click();}
+/* make a texture with shapes, drawn right on the template so you can see where each side goes */
+const SH2={circle:'<circle cx="0" cy="0" r="50"/>',square:'<rect x="-50" y="-50" width="100" height="100"/>',triangle:'<path d="M0-52L50 40H-50z"/>',diamond:'<path d="M0-55L45 0 0 55-45 0z"/>',star:'<path d="M0-55L13-18 52-17 21 7 32 45 0 22-32 45-21 7-52-17-13-18z"/>',heart:'<path d="M0 45C-60 5-48-45-14-40-6-38 0-30 0-25 0-30 6-38 14-40 48-45 60 5 0 45z"/>',stripe:'<rect x="-50" y="-8" width="100" height="16"/>',ring:'<path fill-rule="evenodd" d="M0-50a50 50 0 1 1-.1 0zM0-28a28 28 0 1 0 .1 0z"/>'};
+function texMaker(o){const L=(o.props.TexShapes&&JSON.parse(JSON.stringify(o.props.TexShapes)))||[];let sel=null;const tpl=templateCanvas(meshOf(o.props)).toDataURL('image/png');let showT=true;
+ const d=document.createElement('div');d.id='icmk';d.innerHTML=`<div class="box" style="width:min(640px,100%)"><h3>Texture for ${esc(o.name)}</h3><svg class="cv" viewBox="0 0 ${SW} ${SH}" style="aspect-ratio:4/3"></svg>
+  <div class="row">${Object.keys(SH2).map(k=>`<button data-add="${k}"><svg viewBox="-60 -60 120 120" fill="currentColor">${SH2[k]}</svg>${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}</div>
+  <div class="row"><button id="tx_bg">Fill color</button><button id="tx_col">Color</button><button id="tx_up">Bring forward</button><button id="tx_dn">Send back</button><button id="tx_dup">Copy</button><button id="tx_del">Delete</button><button id="tx_tpl">Hide guide</button></div>
+  <div class="hint">The guide shows where each side of the mesh goes. Tap a shape to add it. Drag to move, green dot to size, orange dot to turn.</div>
+  <div class="row"><button class="ok" id="tx_ok">Use this texture</button><button id="tx_x">Cancel</button></div><input type="color" id="tx_cin" style="display:none"></div>`;
+ document.body.appendChild(d);const cv=d.querySelector('.cv');let bg=o.props.TexBg||o.props.Color||'#a3a2a5';let colT='shape';
+ const body=(withGuide,withSel)=>`<rect width="${SW}" height="${SH}" fill="${bg}"/>`+L.map((s,i)=>`<g transform="translate(${s.x} ${s.y}) rotate(${s.r||0}) scale(${s.w/100} ${s.h/100})" fill="${s.c}"${withSel?` data-i="${i}" style="cursor:move"`:''}>${SH2[s.t]||''}</g>`).join('')+
+  (withGuide?`<image href="${tpl}" width="${SW}" height="${SH}" opacity=".35" pointer-events="none" style="mix-blend-mode:multiply"/>`:'')+
+  (withSel&&sel!=null&&L[sel]?(s=>`<g transform="translate(${s.x} ${s.y}) rotate(${s.r||0})"><rect x="${-s.w/2}" y="${-s.h/2}" width="${s.w}" height="${s.h}" fill="none" stroke="#ff8a1f" stroke-width="4" stroke-dasharray="12 8" pointer-events="none"/><circle cx="${s.w/2}" cy="${s.h/2}" r="22" fill="#fff" stroke="#22c55e" stroke-width="8" data-h="sz"/><circle cx="0" cy="${-s.h/2-50}" r="22" fill="#fff" stroke="#ff8a1f" stroke-width="8" data-h="rot"/></g>`)(L[sel]):'');
+ const draw=()=>{cv.innerHTML=body(showT,true);['tx_col','tx_up','tx_dn','tx_dup','tx_del'].forEach(id=>$(id).classList.toggle('dim',sel==null));};
+ const pt=e=>{const r=cv.getBoundingClientRect();return [(e.clientX-r.left)/r.width*SW,(e.clientY-r.top)/r.height*SH];};
+ cv.onpointerdown=e=>{const h=e.target.dataset&&e.target.dataset.h;const g=e.target.closest('[data-i]');if(!h&&!g){sel=null;draw();return;}if(g)sel=+g.dataset.i;const s=L[sel];const p0=pt(e),s0=Object.assign({},s);cv.setPointerCapture(e.pointerId);
+  cv.onpointermove=ev=>{const p=pt(ev);if(h==='sz'){const a=-(s.r||0)*Math.PI/180;const dx=p[0]-s.x,dy=p[1]-s.y;s.w=Math.max(8,Math.abs(dx*Math.cos(a)-dy*Math.sin(a))*2);s.h=Math.max(8,Math.abs(dx*Math.sin(a)+dy*Math.cos(a))*2);}
+   else if(h==='rot')s.r=Math.round(Math.atan2(p[1]-s.y,p[0]-s.x)*180/Math.PI+90);else{s.x=Math.round(s0.x+p[0]-p0[0]);s.y=Math.round(s0.y+p[1]-p0[1]);}draw();};cv.onpointerup=()=>{cv.onpointermove=null;};draw();};
+ d.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{L.push({t:b.dataset.add,x:SW/2,y:SH/2,w:200,h:200,r:0,c:'#ffffff'});sel=L.length-1;draw();});
+ const cin=$('tx_cin');$('tx_col').onclick=()=>{if(sel==null)return;colT='shape';cin.value=L[sel].c;cin.click();};$('tx_bg').onclick=()=>{colT='bg';cin.value=bg[0]==='#'?bg:'#a3a2a5';cin.click();};
+ cin.oninput=cin.onchange=()=>{if(colT==='bg')bg=cin.value;else if(sel!=null)L[sel].c=cin.value;draw();};
+ $('tx_up').onclick=()=>{if(sel==null||sel>=L.length-1)return;[L[sel],L[sel+1]]=[L[sel+1],L[sel]];sel++;draw();};$('tx_dn').onclick=()=>{if(!sel)return;[L[sel],L[sel-1]]=[L[sel-1],L[sel]];sel--;draw();};
+ $('tx_dup').onclick=()=>{if(sel==null)return;L.push(Object.assign({},L[sel],{x:L[sel].x+30,y:L[sel].y+30}));sel=L.length-1;draw();};$('tx_del').onclick=()=>{if(sel==null)return;L.splice(sel,1);sel=null;draw();};
+ $('tx_tpl').onclick=()=>{showT=!showT;$('tx_tpl').textContent=showT?'Hide guide':'Show guide';draw();};$('tx_x').onclick=()=>d.remove();
+ $('tx_ok').onclick=()=>{const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SW} ${SH}" width="${SW}" height="${SH}">${body(false,false)}</svg>`;const im=new Image();
+  im.onload=()=>{const c=document.createElement('canvas');c.width=SW;c.height=SH;c.getContext('2d').drawImage(im,0,0);o.props.Texture=c.toDataURL('image/jpeg',0.9);o.props.TexShapes=L;o.props.TexBg=bg;commit();d.remove();refreshProps();};
+  im.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svg)));};draw();}
+
+/* ---------- point editor ---------- */
+let ME=null;
+const css=document.createElement('style');css.textContent=`
+#mshe svg.pts{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:19}
+#mshe svg.pts circle{pointer-events:auto;cursor:grab;touch-action:none}#mshe svg.pts.add{pointer-events:auto;cursor:crosshair}
+#mshe .stop .xpill{font:inherit;font-size:12px;border:1px solid var(--ln);background:#1b1c20;color:var(--tx);border-radius:8px;padding:5px 9px;cursor:pointer;white-space:nowrap}#mshe .stop .xpill.on{background:#3a4bd8;border-color:#5b6cff;color:#fff}
+#mshe .mhint{position:absolute;left:10px;right:10px;bottom:84px;text-align:center;color:#fff;text-shadow:0 1px 3px #000;font-size:12.5px;pointer-events:none}`;document.head.appendChild(css);
+function meOpen(o){if(window.bxCloseStudios)bxCloseStudios();meClose();if(!o.props.Mesh)o.props.Mesh=JSON.parse(JSON.stringify(DEF));ME={id:o.id,mode:'move',sel:null};
+ const d=document.createElement('div');d.id='mshe';d.className='studio-ui xa';
+ d.innerHTML=`<div class="stop"><button class="tb sdone" id="me_done">Done</button><span class="stt">Mesh points</span>${[['move','Move points'],['add','Add point'],['del','Delete point']].map(([k,l])=>`<button class="xpill${k==='move'?' on':''}" data-m="${k}">${l}</button>`).join('')}<button class="xpill" id="me_sub">More points</button><button class="xpill" id="me_reset">Back to a cube</button></div><svg class="pts"></svg><div class="mhint" id="me_hint"></div>`;
+ $('view').appendChild(d);d.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{ME.mode=b.dataset.m;d.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('on',x===b));meHint();});
+ $('me_done').onclick=meClose;$('me_reset').onclick=async()=>{if(!await bxConfirm('Make this mesh a plain cube again?'))return;const p=byId(ME.id);p.props.Mesh=JSON.parse(JSON.stringify(DEF));commit();};
+ $('me_sub').onclick=()=>{const p=byId(ME.id);p.props.Mesh=subdivide(meshOf(p.props));commit();};
+ const svg=d.querySelector('svg.pts');svg.onpointerdown=e=>meDown(e);sel=[o.id];refreshAll();meHint();meLoop();}
+function meHint(){const h=$('me_hint');if(h)h.textContent=ME.mode==='move'?'Drag a point to move it. Drag empty space to turn the camera.':ME.mode==='add'?'Tap the mesh where you want a new point.':'Tap a point to delete it.';$('mshe').querySelector('svg.pts').classList.toggle('add',ME.mode==='add');}
+function partM(o){return partMatrix(o.props);}
+function toScreen(p){const c=VP;const x=c[0]*p[0]+c[4]*p[1]+c[8]*p[2]+c[12],y=c[1]*p[0]+c[5]*p[1]+c[9]*p[2]+c[13],w=c[3]*p[0]+c[7]*p[1]+c[11]*p[2]+c[15];if(w<=0.01)return null;const r=$('view').getBoundingClientRect();return [(x/w*0.5+0.5)*r.width,(0.5-y/w*0.5)*r.height,w];}
+function meLoop(){if(!ME)return;const o=byId(ME.id);if(!o||!inWorkspace(o)){meClose();return;}const M=meshOf(o.props);const m=partM(o);const svg=document.querySelector('#mshe svg.pts');if(svg&&VP){
+ const pts=M.v.map(v=>toScreen(M4.xf(m,v)));svg.innerHTML=pts.map((q,i)=>q?`<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="${ME.sel===i?9:7}" fill="${ME.sel===i?'#ff8a1f':'#fff'}" stroke="${ME.mode==='del'?'#e5484d':'#3d5afe'}" stroke-width="3" data-v="${i}"/>`:'').join('');}
+ requestAnimationFrame(meLoop);}
+function meDown(e){const o=byId(ME.id);if(!o)return;const t=e.target.closest&&e.target.closest('[data-v]');const M=o.props.Mesh;
+ if(ME.mode==='add'){e.preventDefault();e.stopPropagation();const hit=rayHit(o,e);if(!hit){toastEd('Tap on the mesh itself');return;}const nv=M.v.length;M.v.push(hit.p.map(x=>Math.round(x*1000)/1000));const [a,b,c]=M.t[hit.ti];M.t.splice(hit.ti,1,[a,b,nv],[b,c,nv],[c,a,nv]);ME.sel=nv;commit();return;}
+ if(!t)return;e.preventDefault();e.stopPropagation();const vi=+t.dataset.v;
+ if(ME.mode==='del'){if(M.v.length<=4){toastEd('A mesh needs at least 4 points');return;}deletePoint(M,vi);ME.sel=null;commit();return;}
+ ME.sel=vi;const m=partM(o),inv=M4.inv(m);const wp=M4.xf(m,M.v[vi]);const sc=toScreen(wp);const r=$('view').getBoundingClientRect();
+ const eye=EYE||camEye();const fw=norm(sub(cam.tgt,eye));const right=norm(cross(fw,[0,1,0]));const up=cross(right,fw);const perPx=2*sc[2]*Math.tan(cam.fov*D2R/2)/r.height;const v0=M.v[vi].slice();const x0=e.clientX,y0=e.clientY;
+ const mv=ev=>{const dx=(ev.clientX-x0)*perPx,dy=-(ev.clientY-y0)*perPx;const w=add(wp,add(mul(right,dx),mul(up,dy)));const l=M4.xf(inv,w);M.v[vi]=l.map(x=>Math.round(x*1000)/1000);};
+ const upF=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',upF);if(M.v[vi].join()!==v0.join())commit();};addEventListener('pointermove',mv);addEventListener('pointerup',upF);}
+function rayHit(o,e){const r=cv.getBoundingClientRect();const nx=(e.clientX-r.left)/r.width*2-1,ny=1-(e.clientY-r.top)/r.height*2;const a=M4.xf(IVP,[nx,ny,-1]),b=M4.xf(IVP,[nx,ny,1]);const m=partM(o),inv=M4.inv(m);
+ const ro=M4.xf(inv,a),rd=sub(M4.xf(inv,b),ro);const M=o.props.Mesh;let best=null;
+ M.t.forEach((tr,ti)=>{const A=M.v[tr[0]],B=M.v[tr[1]],C=M.v[tr[2]];const e1=sub(B,A),e2=sub(C,A),pv=cross(rd,e2),det=dot(e1,pv);if(Math.abs(det)<1e-9)return;const tv=sub(ro,A);const u=dot(tv,pv)/det;if(u<0||u>1)return;const qv=cross(tv,e1);const v=dot(rd,qv)/det;if(v<0||u+v>1)return;const t=dot(e2,qv)/det;if(t>0&&(!best||t<best.t))best={t,ti,p:add(ro,mul(rd,t))};});return best;}
+function deletePoint(M,vi){/* merge the point into its nearest neighbour */const nb=new Set();M.t.forEach(t=>{if(t.includes(vi))t.forEach(x=>{if(x!==vi)nb.add(x);});});let to=null,bd=1e9;nb.forEach(j=>{const d=len(sub(M.v[j],M.v[vi]));if(d<bd){bd=d;to=j;}});if(to==null)return;
+ M.t=M.t.map(t=>t.map(x=>x===vi?to:x)).filter(t=>t[0]!==t[1]&&t[1]!==t[2]&&t[0]!==t[2]);M.v.splice(vi,1);M.t=M.t.map(t=>t.map(x=>x>vi?x-1:x));}
+function subdivide(M){/* split every triangle in 4 (shared edge points) */const v=M.v.map(p=>p.slice()),t=[],mid={};const md=(a,b)=>{const k=a<b?a+'_'+b:b+'_'+a;if(mid[k]==null){mid[k]=v.length;v.push([0,1,2].map(i=>Math.round((v[a][i]+v[b][i])/2*1000)/1000));}return mid[k];};
+ if(M.t.length>1500){toastEd('That mesh already has lots of points');return M;}M.t.forEach(([a,b,c])=>{const ab=md(a,b),bc=md(b,c),ca=md(c,a);t.push([a,ab,ca],[ab,b,bc],[ca,bc,c],[ab,bc,ca]);});return {v,t};}
+function meClose(){if(!ME)return;ME=null;const d=$('mshe');if(d)d.remove();}
+window.bxMeshEditor=meOpen;window.bxME=()=>ME;window.bxMeshTemplate=o=>templateCanvas(meshOf(o.props));
+const _cs=window.bxCloseStudios;window.bxCloseStudios=function(){meClose();return _cs&&_cs.apply(this,arguments);};
+const _tp=togglePlay;togglePlay=function(){meClose();return _tp.apply(this,arguments);};
+
+/* ---------- Properties: mesh + texture buttons ---------- */
+const _rp=refreshProps;refreshProps=function(){_rp.apply(this,arguments);const pp=$('props');const o=typeof sel[0]==='number'?byId(sel[0]):null;if(!pp||!o||o.cls!=='Part'||o.props.Shape!=='Mesh')return;
+ const w=document.createElement('div');w.innerHTML=`<div class="pr"><label>Mesh</label><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="tb" data-mx="edit">Edit points</button></div></div>
+ <div class="pr"><label>Texture</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${o.props.Texture?`<img src="${o.props.Texture}" style="width:48px;height:36px;border-radius:6px;object-fit:cover;border:1px solid var(--ln)">`:''}<button class="tb" data-mx="make">Make</button><button class="tb" data-mx="tpl">Get template</button><button class="tb" data-mx="imp">Import</button>${o.props.Texture?'<button class="tb" data-mx="rm">Remove</button>':''}</div></div>`;
+ const cb=pp.querySelector('#pcode');if(cb)cb.before(...w.childNodes);else pp.append(...w.childNodes);
+ pp.querySelectorAll('[data-mx]').forEach(b=>b.onclick=()=>{const k=b.dataset.mx;if(k==='edit')meOpen(o);else if(k==='make')texMaker(o);else if(k==='tpl')downloadTemplate(o);else if(k==='imp')importTexture(o);else{delete o.props.Texture;delete o.props.TexShapes;commit();refreshProps();}});};
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
