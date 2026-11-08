@@ -202,7 +202,7 @@ body.studio #keyshelp,body.guiedit #keyshelp,body.studio #dock,body.guiedit #doc
 .gx.ghide{display:none}.gx.gstart-hidden>.gi{opacity:.45;outline:1px dashed rgba(255,255,255,.5)}
 .gi{position:absolute;inset:0;display:flex;align-items:center;overflow:hidden;box-sizing:border-box;transition:transform .15s,filter .15s,box-shadow .15s;line-height:1.1;--d:.5s}
 .gtx{padding:0 6%;white-space:pre-wrap;word-break:break-word;width:100%}.gtx.small{font-size:11px;color:#666;position:absolute;bottom:4px;left:0;right:0;text-align:center}
-.gt-Button{cursor:pointer;box-shadow:inset 0 -4px 0 rgba(0,0,0,.22)}.gt-Button:active,.gpress{transform:scale(.93)}
+.gt-Button{cursor:pointer;box-shadow:inset 0 -4px 0 rgba(0,0,0,.22)}
 .gt-Image img{width:100%;height:100%}.gph{width:60%;height:60%;margin:auto;fill:none;stroke:#888;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .gt-TextBox input{width:100%;height:100%;border:none;background:transparent;font:inherit;color:inherit;text-align:inherit;padding:0 6%;outline:none;user-select:text}
 .gt-Scroll{overflow-y:auto;overflow-x:hidden;display:block;scrollbar-width:thin}.gscroll{position:relative;width:100%}
@@ -2647,7 +2647,7 @@ const guisD=()=>{S.guis=S.guis||[];return S.guis;};window.guis=()=>G&&G.guiData?
 const uid=()=>Math.random().toString(36).slice(2,9);
 const TYPES=[['Frame','⬛','Frame'],['Text','🔤','Text'],['Button','🔘','Button'],['Image','🖼️','Image'],['TextBox','⌨️','Text box'],['Scroll','📜','Scroll box'],['Dropdown','▾','Dropdown'],['Slider','🎚','Slider'],['Toggle','🔁','Toggle'],['Progress','📊','Progress bar']];
 const GDEF={Frame:{w:40,h:44,bg:'#1d2230',alpha:0.88,radius:16,text:''},Text:{w:30,h:8,bg:'#000000',alpha:0,text:'Hello!',size:26,color:'#ffffff',bold:true},
- Button:{w:18,h:8,bg:'#3d8bff',alpha:1,radius:12,text:'Click me',size:20,color:'#ffffff',bold:true,hover:'grow'},Image:{w:16,h:22,bg:'#ffffff',alpha:0,radius:10,img:'',fit:'contain'},
+ Button:{w:18,h:8,bg:'#3d8bff',alpha:1,radius:12,text:'Click me',size:20,color:'#ffffff',bold:true,hover:'none'},Image:{w:16,h:22,bg:'#ffffff',alpha:0,radius:10,img:'',fit:'contain'},
  TextBox:{w:28,h:7,bg:'#ffffff',alpha:1,radius:10,text:'',placeholder:'Type here…',size:18,color:'#15171c',var:'answer'},Scroll:{w:30,h:42,bg:'#1d2230',alpha:0.88,radius:14,content:260},
  Dropdown:{w:24,h:7,bg:'#ffffff',alpha:1,radius:10,options:'Red, Blue, Green',value:'Red',size:18,color:'#15171c',var:'choice'},Slider:{w:26,h:5,bg:'#2b2f3a',alpha:1,radius:20,min:0,max:100,value:50,color:'#3d8bff',var:'volume'},
  Toggle:{w:9,h:6,bg:'#555b68',alpha:1,radius:40,value:0,color:'#2fbf5b',var:'switch'},Progress:{w:30,h:4.5,bg:'#2b2f3a',alpha:1,radius:12,value:70,max:100,color:'#2fbf5b',var:'',text:''}};
@@ -2686,7 +2686,7 @@ function fill(el,i,mode,g){const t=el.type;const txt=mode==='play'?interp(el.tex
  if(t==='Toggle'){const on=el._val!=null?!!el._val:!!+el.value;i.classList.toggle('on',on);i.innerHTML='<div class="gtg"><div class="gtgk"></div></div>';i.style.background=on?COLOR_HEX(el.color):hexA(el.bg,el.alpha);
   if(mode!=='edit')i.onclick=e=>{e.stopPropagation();el._val=on?0:1;const p=i.parentNode;const n2=document.createElement('div');p.replaceChild(n2,i);n2.className=i.className;n2.style.cssText=innerStyle(el);fill(el,n2,mode,g);if(mode==='play'){setVar(el.var||el.name,el._val);runEl(el,'change',el._val);}};}
  if(t==='Progress'){const mx=+el.max||100;const v=mode==='play'&&el.var?num(el.var,0):(el._val!=null?el._val:+el.value||0);i.innerHTML=`<div class="gpf" style="width:${clamp(v/mx,0,1)*100}%;background:${COLOR_HEX(el.color)};border-radius:${el.radius||0}px"></div>${el.text?`<span class="gtx">${esc(mode==='play'?interp(el.text):el.text)}</span>`:''}`;if(mode==='play')i.dataset.prog='1';}
- if(mode!=='edit'&&(t==='Button'||t==='Frame'||t==='Text'||t==='Image')){i.addEventListener('click',e=>{if(t!=='Button'&&!el.code)return;e.stopPropagation();i.classList.remove('gpress');void i.offsetWidth;i.classList.add('gpress');if(mode==='play'){runEl(el,'click');sfx('click');}});}}
+ if(mode!=='edit'&&(t==='Button'||t==='Frame'||t==='Text'||t==='Image')){i.addEventListener('click',e=>{if(t!=='Button'&&!el.code)return;e.stopPropagation();if(mode==='play'){runEl(el,'click');sfx('click');}});}}
 function setVar(n,v){if(!G)return;G.vars[String(n).toLowerCase().trim()]=v;}
 /* ---- play-mode runtime ---- */
 function runEl(el,kind,val){if(!G||!el._P)return;const P=el._P;if(P.mainOps&&P.mainOps.length)P.threads.push(newThread(P.mainOps,G.player));if(kind==='click')fire(P,'on_click',null,G.player);if(kind==='choice')fire(P,'on_choice',val,G.player);}
@@ -4877,6 +4877,257 @@ const _os=openSettings;openSettings=function(){_os.apply(this,arguments);const b
 const pm=$('pmenu');if(pm){const h=document.createElement('b');h.style.cssText='color:#fff;display:block;margin-top:10px';h.textContent='Graphics';const box=document.createElement('div');box.className='gfx';box.dataset.full='0';const st=$('pm_reset');if(st){st.before(h,box);}else pm.append(h,box);fill(box);}
 window.bxGfxDbg=()=>({shOn,size:FB.size,shaderOk,sd:!!SD});
 window.bxGfxSet=p=>{if(PRESETS[p]){Object.assign(GX,PRESETS[p],{preset:p});apply();}};
+})();
+
+/* ================= 20. animate parts and GUIs: part animator, GUI animator, play-mode runtime ================= */
+(function(){
+const ANIMS=()=>{S.animations=S.animations||[];return S.animations;};
+const byAid=id=>ANIMS().find(a=>a.id===id);
+const r2=v=>Math.round(v*100)/100;
+/* ---- motion between keys (each key says how it moves to the next one) ---- */
+const MOTIONS=[['smooth','Smooth'],['steady','Same speed'],['choppy','Choppy'],['build','Build up'],['slow','Slow down'],['bounce','Bounce'],['spring','Springy'],['snap','Snap']];
+const EZ={smooth:u=>0.5-0.5*Math.cos(Math.PI*u),steady:u=>u,choppy:u=>Math.floor(u*4)/4,build:u=>u*u*u,slow:u=>1-Math.pow(1-u,3),snap:u=>u<1?0:1,
+ bounce:u=>{const n=7.5625,d=2.75;if(u<1/d)return n*u*u;if(u<2/d)return n*(u-=1.5/d)*u+0.75;if(u<2.5/d)return n*(u-=2.25/d)*u+0.9375;return n*(u-=2.625/d)*u+0.984375;},
+ spring:u=>u===0||u===1?u:Math.pow(2,-10*u)*Math.sin((u*10-0.75)*(2*Math.PI)/3)+1};
+const mixV=(a,b,u)=>{if(typeof a==='number')return a+(b-a)*u;if(Array.isArray(a))return a.map((v,i)=>v+((b[i]==null?v:b[i])-v)*u);if(typeof a==='string'&&a[0]==='#'&&typeof b==='string'){const A=hex2rgb(a),B=hex2rgb(b);return rgb2hex(A.map((v,i)=>v+(B[i]-v)*u));}return u<0.5?a:b;};
+/* value of one target at time t: {field:value} or null when no key holds it */
+function sampleT(A,id,t){const ks=(A.keys||[]).filter(k=>k.v&&k.v[id]).sort((a,b)=>a.t-b.t);if(!ks.length)return null;const L=Math.max(0.05,A.len||1);
+ if(A.loop)t=((t%L)+L)%L;else t=Math.max(0,Math.min(L,t));let a=null,b=null;for(const k of ks){if(k.t<=t+1e-6)a=k;else{b=k;break;}}
+ if(!a){if(A.loop&&ks.length>1){const l=ks[ks.length-1];a={t:l.t-L,v:l.v,e:l.e};}else return Object.assign({},ks[0].v[id]);}
+ if(!b){if(A.loop&&ks.length>1){const f=ks[0];b={t:f.t+L,v:f.v};}else return Object.assign({},a.v[id]);}
+ const u=(EZ[a.e]||EZ.smooth)(Math.max(0,Math.min(1,(t-a.t)/Math.max(1e-4,b.t-a.t))));const va=a.v[id],vb=b.v[id],o={};for(const f in va)o[f]=f in vb?mixV(va[f],vb[f],u):va[f];return o;}
+
+const css=document.createElement('style');css.textContent=`
+.xa .xpill,.xpop .xpill{font:inherit;font-size:12px;border:1px solid var(--ln);background:#1b1c20;color:var(--tx);border-radius:8px;padding:5px 9px;cursor:pointer;white-space:nowrap}
+.xa .xpill.on,.xpop .xpill.on{background:#3a4bd8;border-color:#5b6cff;color:#fff}
+.xa .xnum{display:inline-flex;align-items:center;gap:3px;color:var(--mu)}.xa .xnum b{color:#fff;min-width:34px;text-align:center;font-weight:700}
+.xa .xnum button{font:inherit;width:26px;height:26px;border-radius:7px;border:1px solid var(--ln);background:#1b1c20;color:#fff;cursor:pointer}
+#pae .stime{bottom:78px}
+.xpop{position:absolute;z-index:40;background:rgba(32,34,40,.98);border:1px solid var(--ln);border-radius:12px;padding:8px;box-shadow:0 10px 30px rgba(0,0,0,.45);max-height:46vh;overflow:auto;min-width:220px;max-width:min(360px,calc(100% - 16px));color:var(--tx);font-size:12.5px}
+.xpop h4{margin:2px 2px 6px;font-size:12px;color:#fff}.xpop .xrow{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:8px;cursor:pointer}.xpop .xrow:hover{background:#2a2d36}
+.xpop .xbox{width:18px;height:18px;border-radius:5px;border:2px solid #6a7186;flex:none;display:grid;place-items:center}.xpop .xrow.on .xbox{background:#4a5bf0;border-color:#4a5bf0}
+.xpop .xrow.on .xbox:after{content:'';width:8px;height:4px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
+.xpop .xwrap{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}.xpop input.xq{width:100%;box-sizing:border-box;margin-bottom:6px;background:#1b1c20;border:1px solid var(--ln);color:var(--tx);border-radius:8px;padding:6px 8px}
+.xpop .xnote{color:var(--mu);font-size:11.5px;margin:4px 2px}
+.ga-h{position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #ff8a1f;z-index:99;box-sizing:border-box;touch-action:none}
+.ga-h.rot{left:50%;top:-30px;margin-left:-9px;cursor:grab}.ga-h.rot:after{content:'';position:absolute;left:5px;top:15px;width:2px;height:15px;background:#ff8a1f}
+.ga-h.sc{right:-9px;bottom:-9px;border-color:#22c55e;cursor:nwse-resize}
+#bxgui.ganim .gx.gasel>.gi{outline:2px solid #ff8a1f!important;outline-offset:1px}#bxgui.ganim .grs{display:none}
+#gae{position:absolute;inset:0;pointer-events:none;z-index:21}#gae>*{pointer-events:auto}body.ganim #ge_side,body.ganim #geui .stop,body.ganim #geui .shint{display:none}.xa .stinfo{white-space:nowrap;flex:none}
+@media (max-width:760px){#pae .stime{bottom:70px}}`;document.head.appendChild(css);
+
+/* ---------- shared timeline panel ---------- */
+function timeline(pre){return `<div class="stime"><div class="sbtns"><button class="tb" id="${pre}_play">Play</button><button class="tb" id="${pre}_add">Key</button><button class="tb" id="${pre}_delk">Delete key</button><button class="tb" id="${pre}_mot">Motion</button><button class="tb" id="${pre}_pick">Items</button><span class="stinfo" id="${pre}_info"></span></div>
+ <div class="strack" id="${pre}_track"><div class="sruler" id="${pre}_ruler"></div><div class="skeys" id="${pre}_keys"></div><div class="sheadw"><div class="shead" id="${pre}_head"><i></i></div></div></div></div>`;}
+function drawTime(pre,X){const A=X.A();if(!A)return;const L=A.len,kd=$(pre+'_keys');if(!kd)return;
+ kd.innerHTML=(A.keys||[]).map((k,i)=>`<div class="skey${Math.abs(k.t-X.t)<0.021?' on':''}" data-i="${i}" style="left:${k.t/L*100}%"></div>`).join('');
+ $(pre+'_head').style.left=(X.t/L*100)+'%';const rl=$(pre+'_ruler');const step=L>6?1:L>2.5?0.5:L>1.2?0.25:0.1;let h='';for(let t=0;t<=L+1e-6;t+=step)h+=`<span style="left:${t/L*100}%">${+t.toFixed(2)}</span>`;if(rl.dataset.k!==L+'|'+step){rl.innerHTML=h;rl.dataset.k=L+'|'+step;}
+ $(pre+'_play').textContent=X.playing?'Pause':'Play';const kAt=keyAt(A,X.t);$(pre+'_mot').textContent='Motion: '+(MOTIONS.find(m=>m[0]===((kAt&&kAt.e)||'smooth'))||MOTIONS[0])[1];
+ $(pre+'_pick').textContent=X.itemsLabel();$(pre+'_info').textContent=X.t.toFixed(2)+'s / '+L+'s · '+(A.keys||[]).length+' keys'+(X.draft?' · changes not saved yet: press Key':'');}
+const keyAt=(A,t)=>(A.keys||[]).find(k=>Math.abs(k.t-t)<0.021);
+function bindTime(pre,X){const tr=$(pre+'_track');
+ tr.onpointerdown=e=>{const A=X.A();if(!A)return;const r=tr.getBoundingClientRect();const kEl=e.target.closest('.skey');const kk=kEl&&A.keys[+kEl.dataset.i];X.playing=false;
+  const at=ev=>Math.max(0,Math.min(A.len,Math.round((ev.clientX-r.left)/r.width*A.len*20)/20));let moved=false;const x0=e.clientX;
+  const mv=ev=>{if(Math.abs(ev.clientX-x0)>4)moved=true;const t=at(ev);if(kk&&moved){kk.t=t;}X.seek(t);};const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);if(kk&&moved){A.keys.sort((a,b)=>a.t-b.t);commit();}X.seek(X.t);};
+  addEventListener('pointermove',mv);addEventListener('pointerup',up);mv(e);};
+ $(pre+'_play').onclick=()=>{X.playing=!X.playing;X.last=performance.now();if(X.playing){X.draft=false;const A=X.A();if(A&&!A.loop&&X.t>=A.len-0.01)X.t=0;}X.ui();};
+ $(pre+'_add').onclick=()=>{const A=X.A();if(!A)return;const v=X.capture();if(!Object.keys(v).length){bxAlert('Pick the items to animate first (press Items).');return;}const k=keyAt(A,X.t);if(k){k.v=v;}else{A.keys.push({t:r2(X.t),v,e:'smooth'});A.keys.sort((a,b)=>a.t-b.t);}X.draft=false;commit();X.ui();};
+ $(pre+'_delk').onclick=()=>{const A=X.A();if(!A)return;const k=keyAt(A,X.t);if(!k){bxAlert('Move the time line onto a key to delete it.');return;}A.keys.splice(A.keys.indexOf(k),1);X.draft=false;commit();X.seek(X.t);};
+ $(pre+'_mot').onclick=e=>{const A=X.A();if(!A)return;const k=keyAt(A,X.t);if(!k){bxAlert('Move the time line onto a key first. The motion is how it moves from that key to the next one.');return;}
+  pop(e.currentTarget,`<h4>How it moves to the next key</h4><div class="xwrap">${MOTIONS.map(([m,l])=>`<button class="xpill${(k.e||'smooth')===m?' on':''}" data-m="${m}">${l}</button>`).join('')}</div>`,p=>p.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{k.e=b.dataset.m;commit();closePop();X.ui();}));};
+ $(pre+'_pick').onclick=e=>X.picker(e.currentTarget);}
+/* our own pop-up panel (never the phone's) */
+let POP=null;function closePop(){if(POP){POP.remove();POP=null;}}
+function pop(anchor,html,bind){closePop();const host=anchor.closest('.studio-ui')||document.body;const p=document.createElement('div');p.className='xpop';p.innerHTML=html;host.appendChild(p);POP=p;
+ const hr=host.getBoundingClientRect(),ar=anchor.getBoundingClientRect();const w=Math.min(p.offsetWidth,hr.width-16);let x=ar.left-hr.left;x=Math.max(8,Math.min(hr.width-w-8,x));p.style.left=x+'px';
+ if(ar.top-hr.top>hr.height/2)p.style.bottom=(hr.bottom-ar.top+6)+'px';else p.style.top=(ar.bottom-hr.top+6)+'px';bind&&bind(p);}
+document.addEventListener('pointerdown',e=>{if(POP&&!POP.contains(e.target)&&!e.target.closest('.sbtns,.stop'))closePop();},true);
+const pillsHTML=(arr,cur,attr)=>arr.map(([v,l])=>`<button class="xpill${cur===v?' on':''}" data-${attr}="${v}">${l}</button>`).join('');
+const numHTML=(id,label,val,unit)=>`<span class="xnum">${label}<button data-n="${id}" data-d="-1">−</button><b id="${id}">${val}${unit||''}</b><button data-n="${id}" data-d="1">+</button></span>`;
+
+/* =========================== PART ANIMATOR =========================== */
+let PA=null;
+const PFIELDS=o=>({P:o.props.Position.slice(),O:(o.props.Orientation||[0,0,0]).slice(),S:o.props.Size.slice(),C:o.props.Color||'#a3a2a5',T:+(o.props.Transparency||0)});
+const putProps=(o,v)=>{if(!o||!v)return;if(v.P)o.props.Position=v.P.map(r2);if(v.O)o.props.Orientation=v.O.map(r2);if(v.S)o.props.Size=v.S.map(r2);if(v.C)o.props.Color=v.C;if(v.T!=null)o.props.Transparency=r2(v.T);};
+const isPart=o=>o&&o.cls==='Part'&&o.props&&o.props.Position;
+function paOpen(A){if(window.bxCloseStudios)bxCloseStudios();paClose();gaClose();A.parts=A.parts||[];A.keys=A.keys||[];
+ PA={id:A.id,t:0,playing:false,draft:false,base:{},last:performance.now()};A.parts.forEach(id=>{const o=byId(id);if(isPart(o))PA.base[id]=PFIELDS(o);});
+ const X=paX();const d=document.createElement('div');d.id='pae';d.className='studio-ui xa';
+ d.innerHTML=`<div class="stop"><button class="tb sdone" id="pa_done">Done</button><span class="stt">Part animation</span><input id="pa_name" value="${esc(A.name)}">
+  <label>Plays</label>${pillsHTML([['start','When the game starts'],['custom','Only from code']],A.trig==='custom'?'custom':'start','tr')}
+  <button class="xpill${A.loop?' on':''}" id="pa_loop">Loop</button>${numHTML('pa_len','Length',A.len,'s')}${numHTML('pa_spd','Speed',A.speed||1,'x')}</div>${timeline('pa')}`;
+ $('view').appendChild(d);bindTop(d,X,'pa');bindTime('pa',X);
+ X.seek(0);paTick();if(!A.parts.length)setTimeout(()=>{if(PA)X.picker($('pa_pick'));},60);}
+function paX(){return {get t(){return PA.t;},set t(v){PA.t=v;},get playing(){return PA.playing;},set playing(v){PA.playing=v;},get draft(){return PA.draft;},set draft(v){PA.draft=v;},get last(){return PA.last;},set last(v){PA.last=v;},
+ A:()=>PA&&byAid(PA.id),ui:()=>drawTime('pa',paX()),
+ itemsLabel:()=>{const A=byAid(PA.id);return 'Parts ('+(A?A.parts.length:0)+')';},
+ capture:()=>{const A=byAid(PA.id),v={};A.parts.forEach(id=>{const o=byId(id);if(isPart(o))v[id]=PFIELDS(o);});return v;},
+ seek:t=>{PA.t=t;PA.draft=false;paApply();const A=byAid(PA.id);if(A)paSig=sig(A);paX().ui();},
+ picker:anchor=>paPicker(anchor)};}
+function paApply(){const A=byAid(PA.id);if(!A)return;A.parts.forEach(id=>{const o=byId(id);if(!isPart(o))return;const v=sampleT(A,id,PA.t)||PA.base[id];putProps(o,v);});}
+function paPicker(anchor){const A=byAid(PA.id);if(!A)return;let q='';
+ const draw=p=>{const all=S.items.filter(isPart);const L=all.filter(o=>!q||o.name.toLowerCase().includes(q));
+  p.innerHTML=`<h4>Which parts move</h4><input class="xq" placeholder="Search parts" value="${esc(q)}"><div class="xwrap"><button class="xpill" data-x="sel">Add the parts I selected (${sel.filter(id=>isPart(byId(id))).length})</button><button class="xpill" data-x="none">Clear</button></div>
+  ${L.slice(0,300).map(o=>`<div class="xrow${A.parts.includes(o.id)?' on':''}" data-id="${o.id}"><span class="xbox"></span>${esc(o.name)}</div>`).join('')||'<div class="xnote">No parts yet. Build some parts first.</div>'}
+  <div class="xnote">Pose the ticked parts with the normal Move, Rotate and Scale tools (and Properties for color), then press Key.</div>`;
+  const qi=p.querySelector('.xq');qi.oninput=()=>{q=qi.value.toLowerCase();const c=qi.selectionStart;draw(p);const n=p.querySelector('.xq');n.focus();n.setSelectionRange(c,c);};
+  p.querySelectorAll('.xrow').forEach(r=>r.onclick=()=>{const id=+r.dataset.id;const i=A.parts.indexOf(id);if(i>=0){A.parts.splice(i,1);A.keys.forEach(k=>{if(k.v)delete k.v[id];});const o=byId(id);if(o&&PA.base[id])putProps(o,PA.base[id]);}else{A.parts.push(id);const o=byId(id);PA.base[id]=PFIELDS(o);}commit();draw(p);paX().ui();});
+  p.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{if(b.dataset.x==='sel')sel.forEach(id=>{const o=byId(id);if(isPart(o)&&!A.parts.includes(id)){A.parts.push(id);PA.base[id]=PFIELDS(o);}});else{A.parts.forEach(id=>{const o=byId(id);if(o&&PA.base[id])putProps(o,PA.base[id]);});A.parts=[];A.keys=[];}commit();draw(p);paX().ui();});};
+ pop(anchor,'',draw);}
+/* notice when the user moves a ticked part: that makes a new pose (not saved until Key) */
+let paSig='';function paTick(){if(!PA)return;const A=byAid(PA.id);if(!A){paClose();return;}const now=performance.now();
+ if(PA.playing){PA.t+=(now-PA.last)/1000*(A.speed||1);if(PA.t>=A.len){if(A.loop)PA.t%=A.len;else{PA.t=A.len;PA.playing=false;}}paApply();paX().ui();paSig=sig(A);}
+ else{const s=sig(A);if(paSig&&s!==paSig){PA.draft=true;paX().ui();}paSig=s;}PA.last=now;requestAnimationFrame(paTick);}
+const sig=A=>A.parts.map(id=>{const o=byId(id);return o?JSON.stringify([o.props.Position,o.props.Orientation,o.props.Size,o.props.Color,o.props.Transparency]):'';}).join('|');
+function paClose(){if(!PA)return;const A=byAid(PA.id);if(A)A.parts.forEach(id=>{const o=byId(id);if(o&&PA.base[id])putProps(o,PA.base[id]);});PA=null;closePop();const d=$('pae');if(d)d.remove();commit();refreshAll();}
+window.bxOpenPartAnim=paOpen;window.bxPA=()=>PA;
+
+/* shared top bar: name, when it plays, loop, length, speed */
+function bindTop(d,X,pre){const A=()=>X.A();
+ $(pre+'_done').onclick=()=>{pre==='pa'?paClose():gaClose();};
+ $(pre+'_name').oninput=e=>{const a=A();if(a)a.name=e.target.value.trim()||'Animation';};$(pre+'_name').onchange=()=>commit();
+ d.querySelectorAll('.stop [data-tr]').forEach(b=>b.onclick=()=>{const a=A();if(!a)return;a.trig=b.dataset.tr;d.querySelectorAll('.stop [data-tr]').forEach(x=>x.classList.toggle('on',x===b));if(pre==='ga')gaTrigExtra();commit();});
+ $(pre+'_loop').onclick=()=>{const a=A();if(!a)return;a.loop=!a.loop;$(pre+'_loop').classList.toggle('on',a.loop);commit();};
+ d.querySelectorAll('.stop [data-n]').forEach(b=>b.onclick=()=>{const a=A();if(!a)return;const dd=+b.dataset.d;
+  if(b.dataset.n===pre+'_len'){const st=a.len<2?0.25:0.5;const v=Math.max(0.25,Math.min(60,r2(a.len+dd*st)));const k=v/a.len;(a.keys||[]).forEach(q=>q.t=r2(q.t*k));a.len=v;X.t=Math.min(X.t,v);$(pre+'_len').textContent=v+'s';}
+  else{const v=Math.max(0.25,Math.min(5,r2((a.speed||1)+dd*0.25)));a.speed=v;$(pre+'_spd').textContent=v+'x';}commit();X.ui();});}
+
+/* =========================== GUI ANIMATOR =========================== */
+let GA=null;
+const guiOf=A=>(S.guis||[]).find(g=>g.id===A.gui);
+const GZ=()=>({x:0,y:0,r:0,s:1,o:1});
+function gaOpen(A){const g=guiOf(A);if(!g)return;if(!window.bxGE||bxGE.g!==g){bxOpenGE(g);}gaClose();A.els=A.els||[];A.keys=A.keys||[];
+ GA={id:A.id,t:0,playing:false,draft:false,cur:{},last:performance.now(),sel:null};document.body.classList.add('ganim');
+ const X=gaX();const d=document.createElement('div');d.id='gae';d.className='studio-ui xa';
+ d.innerHTML=`<div class="stop"><button class="tb sdone" id="ga_done">Done</button><span class="stt">GUI animation</span><input id="ga_name" value="${esc(A.name)}">
+  <label>Plays</label>${pillsHTML([['show','When the GUI shows'],['click','When something is clicked'],['custom','Only from code']],A.trig||'show','tr')}<span id="ga_trx"></span>
+  <button class="xpill${A.loop?' on':''}" id="ga_loop">Loop</button>${numHTML('ga_len','Length',A.len,'s')}${numHTML('ga_spd','Speed',A.speed||1,'x')}<button class="xpill" id="ga_list">Other animations</button></div>${timeline('ga')}
+  <div class="shint">Tap an item to pick it. Drag it to move, the orange dot turns it and the green dot sizes it. Press Key to save the pose.</div>`;
+ $('view').appendChild(d);bindTop(d,X,'ga');bindTime('ga',X);gaTrigExtra();
+ $('ga_list').onclick=e=>gaList(e.currentTarget);const ly=$('bxgui');if(ly)ly.classList.add('ganim');X.seek(0);gaTick();if(!A.els.length)setTimeout(()=>{if(GA)X.picker($('ga_pick'));},60);}
+function gaTrigExtra(){const A=byAid(GA.id),w=$('ga_trx');if(!A||!w)return;const g=guiOf(A);
+ w.innerHTML=A.trig==='click'?`<button class="xpill on" id="ga_clk">${esc(((g.els.find(e=>e.id===A.clickEl)||{}).name)||'Pick what is clicked')}</button>`:'';
+ const b=$('ga_clk');if(b)b.onclick=()=>pop(b,`<h4>Plays when this is clicked</h4>${g.els.map(e=>`<div class="xrow${A.clickEl===e.id?' on':''}" data-id="${e.id}"><span class="xbox"></span>${esc(e.name)} <small style="color:var(--mu)">${e.type}</small></div>`).join('')}`,p=>p.querySelectorAll('.xrow').forEach(r=>r.onclick=()=>{A.clickEl=r.dataset.id;commit();closePop();gaTrigExtra();}));}
+function gaList(anchor){const A=byAid(GA.id);const g=guiOf(A);const L=ANIMS().filter(a=>a.kind==='gui'&&a.gui===g.id);
+ pop(anchor,`<h4>Animations for ${esc(g.name)}</h4>${L.map(a=>`<div class="xrow${a.id===A.id?' on':''}" data-id="${a.id}"><span class="xbox"></span>${esc(a.name)}</div>`).join('')}<div class="xwrap" style="margin-top:6px"><button class="xpill" data-x="new">New animation</button></div>`,
+  p=>{p.querySelectorAll('.xrow').forEach(r=>r.onclick=()=>{closePop();gaOpen(byAid(r.dataset.id));});p.querySelector('[data-x]').onclick=()=>{closePop();const n=newPGA('gui',uniqueName(g.name+' anim'),{gui:g.id});ANIMS().push(n);commit();gaOpen(n);};});}
+function gaX(){return {get t(){return GA.t;},set t(v){GA.t=v;},get playing(){return GA.playing;},set playing(v){GA.playing=v;},get draft(){return GA.draft;},set draft(v){GA.draft=v;},get last(){return GA.last;},set last(v){GA.last=v;},
+ A:()=>GA&&byAid(GA.id),ui:()=>drawTime('ga',gaX()),itemsLabel:()=>{const A=byAid(GA.id);return 'Items ('+(A?A.els.length:0)+')';},
+ capture:()=>{const A=byAid(GA.id),v={};A.els.forEach(id=>{v[id]=Object.assign(GZ(),GA.cur[id]||{});});return v;},
+ seek:t=>{GA.t=t;GA.draft=false;gaSample();gaApply();gaX().ui();},picker:a=>gaPicker(a)};}
+function gaSample(){const A=byAid(GA.id);if(!A)return;GA.cur={};A.els.forEach(id=>{GA.cur[id]=Object.assign(GZ(),sampleT(A,id,GA.t)||{});});}
+function gaPicker(anchor){const A=byAid(GA.id);const g=guiOf(A);
+ const draw=p=>{p.innerHTML=`<h4>Which items move</h4>${g.els.map(e=>`<div class="xrow${A.els.includes(e.id)?' on':''}" data-id="${e.id}"><span class="xbox"></span>${esc(e.name)} <small style="color:var(--mu)">${e.type}</small></div>`).join('')||'<div class="xnote">This GUI is empty.</div>'}<div class="xnote">You can also just tap an item in the GUI to add it.</div>`;
+  p.querySelectorAll('.xrow').forEach(r=>r.onclick=()=>{const id=r.dataset.id;const i=A.els.indexOf(id);if(i>=0){A.els.splice(i,1);A.keys.forEach(k=>{if(k.v)delete k.v[id];});delete GA.cur[id];}else{A.els.push(id);GA.cur[id]=GZ();}commit();draw(p);gaApply();gaX().ui();});};pop(anchor,'',draw);}
+/* put the pose on the GUI pictures: offsets are % of the parent box, so they look the same on any screen */
+function applyNode(n,v){if(!n)return;const pr=n.parentNode&&n.parentNode.getBoundingClientRect();const w=pr?pr.width:0,h=pr?pr.height:0;
+ n.style.transform=`translate(${(v.x||0)/100*w}px,${(v.y||0)/100*h}px) rotate(${v.r||0}deg) scale(${v.s==null?1:v.s})`;n.style.opacity=v.o==null?'':Math.max(0,Math.min(1,v.o));}
+function gaApply(){const A=byAid(GA.id);const ly=$('bxgui');if(!A||!ly)return;ly.classList.add('ganim');ly.querySelectorAll('.ga-h').forEach(h=>h.remove());ly.querySelectorAll('.gasel').forEach(n=>n.classList.remove('gasel'));
+ A.els.forEach(id=>applyNode(ly.querySelector(`.gx[data-id="${id}"]`),GA.cur[id]||GZ()));
+ const n=GA.sel&&ly.querySelector(`.gx[data-id="${GA.sel}"]`);if(n&&!GA.playing){n.classList.add('gasel');n.insertAdjacentHTML('beforeend','<div class="ga-h rot"></div><div class="ga-h sc"></div>');}}
+let gaLayerBound=null;
+function gaBindLayer(){const ly=$('bxgui');if(!ly||gaLayerBound===ly)return;gaLayerBound=ly;
+ ly.addEventListener('pointerdown',e=>{if(!GA)return;const A=byAid(GA.id);const gx=e.target.closest('.gx');e.stopPropagation();e.preventDefault();closePop();if(!gx){GA.sel=null;gaApply();return;}
+  const id=gx.dataset.id;if(!A.els.includes(id)){A.els.push(id);GA.cur[id]=Object.assign(GZ(),sampleT(A,id,GA.t)||{});commit();}GA.sel=id;GA.playing=false;gaApply();gaX().ui();
+  const node=ly.querySelector(`.gx[data-id="${id}"]`);const pr=node.parentNode.getBoundingClientRect();const v=GA.cur[id];const st={x:e.clientX,y:e.clientY,v:Object.assign({},v)};
+  const mode=e.target.classList.contains('rot')?'rot':e.target.classList.contains('sc')?'sc':'mv';const br=node.getBoundingClientRect();const c=[br.left+br.width/2,br.top+br.height/2];
+  const a0=Math.atan2(e.clientY-c[1],e.clientX-c[0]),d0=Math.hypot(e.clientX-c[0],e.clientY-c[1])||1;let moved=false;
+  const mv=ev=>{if(Math.abs(ev.clientX-st.x)+Math.abs(ev.clientY-st.y)>2)moved=true;if(!moved)return;
+   if(mode==='mv'){v.x=r2(st.v.x+(ev.clientX-st.x)/pr.width*100);v.y=r2(st.v.y+(ev.clientY-st.y)/pr.height*100);}
+   else if(mode==='rot'){let r=st.v.r+(Math.atan2(ev.clientY-c[1],ev.clientX-c[0])-a0)*180/Math.PI;if(!ev.shiftKey)r=Math.round(r);v.r=r2(r);}
+   else{v.s=r2(Math.max(0.05,st.v.s*Math.hypot(ev.clientX-c[0],ev.clientY-c[1])/d0));}
+   applyNode(node,v);GA.draft=true;};
+  const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);gaApply();gaX().ui();};addEventListener('pointermove',mv);addEventListener('pointerup',up);},true);}
+function gaTick(){if(!GA)return;if(!window.bxGE){gaClose();return;}const A=byAid(GA.id);if(!A){gaClose();return;}gaBindLayer();const now=performance.now();
+ if(GA.playing){GA.t+=(now-GA.last)/1000*(A.speed||1);if(GA.t>=A.len){if(A.loop)GA.t%=A.len;else{GA.t=A.len;GA.playing=false;}}gaSample();gaApply();gaX().ui();}
+ else{const ly=$('bxgui');const n=GA.sel&&ly&&ly.querySelector(`.gx[data-id="${GA.sel}"]`);if(GA.sel&&n&&!n.querySelector('.ga-h'))gaApply();else if(ly&&A.els.some(id=>{const q=ly.querySelector(`.gx[data-id="${id}"]`);return q&&!q.style.transform;}))gaApply();}
+ GA.last=now;requestAnimationFrame(gaTick);}
+function gaClose(){if(!GA)return;GA=null;closePop();document.body.classList.remove('ganim');const d=$('gae');if(d)d.remove();const ly=$('bxgui');if(ly){ly.classList.remove('ganim');ly.querySelectorAll('.ga-h').forEach(h=>h.remove());ly.querySelectorAll('.gx').forEach(n=>{n.style.transform='';n.style.opacity='';n.classList.remove('gasel');});}commit();}
+window.bxOpenGuiAnim=gaOpen;window.bxGA=()=>GA;
+
+/* "Animate" button in the GUI editor */
+function newPGA(kind,name,extra){return Object.assign({id:'a'+Date.now().toString(36)+Math.floor(Math.random()*999),name,kind,trig:kind==='gui'?'show':'start',loop:false,len:1,speed:1,keys:[]},kind==='gui'?{els:[]}:{parts:[]},extra||{});}
+const uniqueName=b=>{let n=b,i=2;while(ANIMS().some(a=>nrmName(a.name)===nrmName(n)))n=b+' '+i++;return n;};
+new MutationObserver(()=>{const top=document.querySelector('#geui .stop');if(top&&!top.querySelector('#ge_anim')){const b=document.createElement('button');b.className='tb';b.id='ge_anim';b.textContent='Animate';const r=$('ge_replay');(r||top.lastChild).after(b);
+ b.onclick=()=>{const g=bxGE&&bxGE.g;if(!g)return;let A=ANIMS().find(a=>a.kind==='gui'&&a.gui===g.id);if(!A){A=newPGA('gui',uniqueName(g.name+' anim'),{gui:g.id});ANIMS().push(A);commit();}gaOpen(A);};}}).observe(document.body,{childList:true,subtree:true});
+
+/* close ours when another studio opens or play starts */
+const _cs=window.bxCloseStudios;window.bxCloseStudios=function(){paClose();if(!GA||!window.bxGE)gaClose();return _cs&&_cs.apply(this,arguments);};
+const _tp=togglePlay;togglePlay=function(){paClose();gaClose();return _tp.apply(this,arguments);};
+
+/* ---------- Animations tab: choose what the animation moves ---------- */
+let mkKind='char',mkGui=null;
+const TRL={start:'When the game starts',custom:'Only from code',show:'When the GUI shows',click:'When clicked'};
+const _rx=refreshExplorer;refreshExplorer=function(){_rx.apply(this,arguments);if(exTab!=='Animations')return;const ex=$('explorer');const L=ANIMS();
+ ex.querySelectorAll('.arow').forEach(row=>{const b=row.querySelector('[data-e]');if(!b)return;const A=L[+b.dataset.e];if(!A||!A.kind||A.kind==='char')return;
+  const sm=row.querySelector('small');if(sm)sm.textContent=(A.kind==='parts'?'Parts ('+(A.parts||[]).length+')':'GUI '+((guiOf(A)||{}).name||'?'))+' · '+(TRL[A.trig]||A.trig)+' · '+A.len+'s'+(A.loop?' · loops':'');
+  b.onclick=()=>A.kind==='parts'?paOpen(A):gaOpen(A);});
+ const nm=$('na_name');if(!nm)return;const menu=nm.closest('.mkmenu');const gl=(S.guis||[]);
+ const w=document.createElement('div');w.className='mmw xa';w.innerHTML=`<div style="color:var(--mu);margin:4px 0">What moves</div><div style="display:flex;gap:5px;flex-wrap:wrap">${pillsHTML([['char','Characters'],['parts','Parts'],['gui','A GUI']],mkKind,'k')}</div><div id="na_gui" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px"></div>`;
+ nm.after(w);const sync=()=>{w.querySelectorAll('[data-k]').forEach(x=>x.classList.toggle('on',x.dataset.k===mkKind));menu.querySelectorAll('label.mmw').forEach(l=>l.style.display=mkKind==='char'?'':'none');
+  const ng=$('na_gui');ng.innerHTML=mkKind==='gui'?(gl.length?pillsHTML(gl.map(g=>[g.id,g.name]),mkGui,'g'):'<span class="hint">Make a GUI in the GUI tab first.</span>'):'';ng.querySelectorAll('[data-g]').forEach(x=>x.onclick=()=>{mkGui=x.dataset.g;sync();});};
+ w.querySelectorAll('[data-k]').forEach(x=>x.onclick=()=>{mkKind=x.dataset.k;if(mkKind==='gui'&&!mkGui&&gl[0])mkGui=gl[0].id;sync();});sync();
+ const mk=menu.querySelector('[data-a="mk"]');const old=mk.onclick;mk.onclick=()=>{if(mkKind==='char')return old&&old();const g=gl.find(x=>x.id===mkGui);if(mkKind==='gui'&&!g){bxAlert('Pick which GUI to animate.');return;}
+  const n=uniqueName((nm.value||'').trim()||(mkKind==='parts'?'Part animation':g.name+' anim'));const A=newPGA(mkKind,n,mkKind==='gui'?{gui:g.id}:{});if(mkKind==='parts'){A.parts=sel.filter(id=>isPart(byId(id)));A.loop=true;A.len=2;}
+  ANIMS().push(A);commit();mkKind='char';const c=menu.querySelector('[data-a="cx"]');if(c)c.click();A.kind==='parts'?paOpen(A):gaOpen(A);};};
+
+/* =========================== PLAY MODE =========================== */
+let RUN=[];
+const pgByName=n=>{const k=nrmName(n);return ANIMS().find(a=>(a.kind==='parts'||a.kind==='gui')&&nrmName(a.name)===k);};
+function startRun(A){RUN=RUN.filter(r=>r.A.id!==A.id);RUN.push({A,t0:G.t});}
+const _pa=window.playAnim;window.playAnim=function(h,a){const n=String(a||'').split(':')[0].trim();const A=pgByName(n);if(A&&G){startRun(A);return;}return _pa.apply(this,arguments);};
+if(CMDS.stop_animation&&CMDS.stop_animation.hum){const h0=CMDS.stop_animation.hum;CMDS.stop_animation.hum=function(c,h,a){if(a&&String(a).trim()){const A=pgByName(a);if(A){RUN=RUN.filter(r=>r.A.id!==A.id);return;}}return h0.apply(this,arguments);};}
+let openWas={};
+function runStart(){RUN=[];openWas={};ANIMS().forEach(A=>{if(A.kind==='parts'&&A.trig!=='custom')RUN.push({A,t0:0});});}
+const _sp=startPlay;startPlay=function(){const r=_sp.apply(this,arguments);if(G)runStart();return r;};
+const _gs=gameStep;gameStep=function(dt){_gs.apply(this,arguments);if(!G||!RUN.length)return;let map=null;
+ RUN.forEach(R=>{if(R.A.kind!=='parts')return;const A=R.A;let t=(G.t-R.t0)*(A.speed||1);if(!A.loop&&t>=A.len){t=A.len;R.done=true;}
+  if(!map){map={};G.parts.forEach(P=>{if(P&&P.o&&P.alive!==false)map[P.o.id]=P;});}
+  (A.parts||[]).forEach(id=>{const P=map[id];if(!P)return;const v=sampleT(A,id,t);if(!v)return;if(v.P)P.st.Position=v.P.slice();if(v.O)P.st.Orientation=v.O.slice();if(v.S)P.st.Size=v.S.slice();if(v.C)P.st.Color=v.C;if(v.T!=null)P.st.Transparency=v.T;
+   try{P.obb=obbOfSt(P.st);}catch(e){}if(P.vel)P.vel=[0,0,0];if(P.v&&Array.isArray(P.v))P.v=[0,0,0];});});
+ RUN=RUN.filter(R=>!(R.A.kind==='parts'&&R.done));};
+/* GUI animations while playing */
+const _hud=hud;hud=function(){_hud.apply(this,arguments);if(!G||!G.guiData)return;const ly=$('bxgui');
+ G.guiData.forEach(g=>{const was=openWas[g.id];if(g._open&&!was)ANIMS().forEach(A=>{if(A.kind==='gui'&&A.gui===g.id&&(A.trig||'show')==='show')startRun(A);});openWas[g.id]=!!g._open;});
+ if(!ly)return;RUN.forEach(R=>{if(R.A.kind!=='gui')return;const A=R.A;const g=G.guiData.find(x=>x.id===A.gui);if(!g||!g._open)return;let t=(G.t-R.t0)*(A.speed||1);if(!A.loop&&t>=A.len)t=A.len;
+  (A.els||[]).forEach(id=>{const v=sampleT(A,id,t);if(v)applyNode(ly.querySelector(`.ggui[data-g="${g.id}"] .gx[data-id="${id}"]`),Object.assign(GZ(),v));});});};
+document.addEventListener('click',e=>{if(!G||!e.target.closest)return;const gx=e.target.closest('#bxgui.play .gx');if(!gx)return;const id=gx.dataset.id;ANIMS().forEach(A=>{if(A.kind==='gui'&&A.trig==='click'&&A.clickEl===id)startRun(A);});},true);
+const _stp=stopPlay;stopPlay=function(){RUN=[];return _stp.apply(this,arguments);};
+window.bxRun=()=>RUN;
+})();
+
+/* ================= 21. inventory bar: shows up by itself while playing once you carry items ================= */
+(function(){
+const css=document.createElement('style');css.textContent=`
+#bxinv{position:absolute;z-index:14;display:none;gap:6px;pointer-events:auto;left:50%;bottom:14px;transform:translateX(-50%);flex-direction:row;max-width:70%;overflow:auto;scrollbar-width:none;padding:2px}
+#bxinv::-webkit-scrollbar{display:none}
+#bxinv .is{position:relative;flex:none;width:58px;height:58px;border-radius:12px;background:rgba(20,22,28,.72);border:2px solid rgba(255,255,255,.18);color:#fff;font:700 11px/1.1 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.3);backdrop-filter:blur(4px);touch-action:manipulation;user-select:none}
+#bxinv .is.on{border-color:#ffd24a;background:rgba(60,52,20,.8)}
+#bxinv .is i{width:22px;height:22px;border-radius:7px;display:block;box-shadow:inset 0 -3px 0 rgba(0,0,0,.25),inset 0 2px 0 rgba(255,255,255,.35)}
+#bxinv .is span{max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 3px}
+#bxinv .is b{position:absolute;right:4px;top:3px;font-size:11px;color:#ffd24a}
+#bxinv .is small{position:absolute;left:5px;top:3px;font-size:9px;opacity:.6}
+body.mob #bxinv{left:auto;right:8px;bottom:auto;top:50%;transform:translateY(-62%);flex-direction:column;max-height:46%;max-width:none}
+body.mob #bxinv .is{width:52px;height:52px}`;document.head.appendChild(css);
+const bar=document.createElement('div');bar.id='bxinv';$('view').appendChild(bar);
+/* each item gets a steady color from its name (or from a Storage part with the same name) */
+function colorOf(n){const src=S.items.find(o=>o.cls==='Part'&&nrmName(o.name)===nrmName(n));if(src&&src.props.Color)return src.props.Color;let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))>>>0;return `hsl(${h%360},62%,55%)`;}
+let sig='';
+function draw(){const on=G&&G.player&&sg('ShowInventory',true);const I=on?(G.player.bxInv||{}):{};const L=Object.entries(I).filter(([,k])=>k>0);
+ if(!on||!L.length){if(bar.style.display!=='none'){bar.style.display='none';sig='';}return;}
+ const s=JSON.stringify(L)+'|'+(G.player.bxHeld||'');if(s===sig)return;sig=s;bar.style.display='flex';
+ bar.innerHTML=L.map(([n,k],i)=>`<div class="is${G.player.bxHeld===n?' on':''}" data-n="${esc(n)}">${i<9?`<small>${i+1}</small>`:''}<i style="background:${colorOf(n)}"></i><span>${esc(n)}</span>${k>1?`<b>${k}</b>`:''}</div>`).join('');}
+/* tap a slot to hold it, tap it again to use it */
+function pick(n){if(!G||!G.player||!n)return;const h=G.player;if(h.bxHeld===n){CMDS.use_item&&CMDS.use_item.hum(null,h,n);if(!(h.bxInv||{})[n])h.bxHeld=null;}else if(CMDS.equip)CMDS.equip.hum(null,h,n);sig='';draw();}
+bar.addEventListener('click',e=>{const s=e.target.closest('.is');if(s)pick(s.dataset.n);e.stopPropagation();});
+bar.addEventListener('pointerdown',e=>e.stopPropagation());
+addEventListener('keydown',e=>{if(!G||!/^[1-9]$/.test(e.key)||/INPUT|TEXTAREA/.test((document.activeElement||{}).tagName||''))return;const L=Object.entries((G.player&&G.player.bxInv)||{}).filter(([,k])=>k>0);const it=L[+e.key-1];if(it)pick(it[0]);});
+const _h=hud;hud=function(){_h.apply(this,arguments);draw();};
+const _s=stopPlay;stopPlay=function(){const r=_s.apply(this,arguments);bar.style.display='none';sig='';return r;};
+/* "#copy_from_storage = Gem : 0,3,8" means: copy Gem to that spot (Gem is not who runs it) */
+if(CMDS.copy_from_storage){CMDS.copy_from_storage.tg=false;CMDS.copy_from_storage.ex='#copy_from_storage = Tree : 0, 5, 20';const f0=CMDS.copy_from_storage.fn;CMDS.copy_from_storage.fn=(c,a)=>f0(c,String(a||'').replace(/\{([a-z_0-9]+)\}/gi,(_,v)=>{const x=getVar(v);return x==null?'0':x;}));}
+/* setting so a game can turn it off */
+const w=SETTINGS.find(x=>/While playing/.test(x[0]));if(w&&!w[1].some(r=>r[0]==='ShowInventory'))w[1].splice(1,0,['ShowInventory','Inventory bar (shows items you carry)']);
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
