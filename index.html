@@ -3084,6 +3084,14 @@ const DR={kick:(a,t)=>{body(a,t,150,45,0.45,0.5);nz(a,t,0.02,'lowpass',3000,1,0.
 Object.keys(DR).forEach(k=>reg('Music','drum_'+k,`plays a drum sound: ${k.replace(/_/g,' ')}`,'#drum_'+k,()=>{const a=ac();if(!a||vol()<=0)return;DR[k](a,a.currentTime+0.01);}));
 })();
 
+/* ================= 11. code window: always-visible close (X) button, header fits small screens ================= */
+(function(){const st=document.createElement('style');st.textContent=`#codebox>*{min-width:0}body.mob #codebox{grid-template-columns:minmax(0,1fr)!important}#codehead{flex-wrap:wrap;row-gap:6px}#codetitle{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#codex{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border-radius:8px;border:1px solid var(--ln);background:var(--pn2);color:var(--tx);cursor:pointer;padding:0;order:99}body.mob #codetitle{flex:1 1 calc(100% - 46px);order:0}body.mob #codex{order:1}body.mob #codehead>button:not(#codex){order:2}#codex:hover{background:#e5484d;border-color:#e5484d;color:#fff}
+#codehead{position:relative}`;document.head.appendChild(st);
+const h=$('codehead');if(h&&!$('codex')){const b=document.createElement('button');b.id='codex';b.title='Close';b.setAttribute('aria-label','Close');
+ b.innerHTML='<svg width="16" height="16" viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+ b.onclick=()=>$('codeclose').click();const t=$('codetitle');t.after(b);b.style.order='';}})();
+
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
 function init(){if(!load())defaultPlace();lastSnap=snapState();bind();let dv=null;try{dv=localStorage.getItem('buildx-device');}catch(e){}setDevice(dv||(matchMedia('(pointer:coarse)').matches?'mob':'pc'));if(!dv)$('devpick').style.display='flex';applySettings();refreshToolbox();refreshAll();out('👋 Welcome to BuildX! '+Object.keys(CMDS).length+' commands, '+CATALOG.length+' things to insert. Press ▶ Play to test.');startIcons();requestAnimationFrame(frame);}
 
