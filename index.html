@@ -5708,19 +5708,30 @@ body.mob #geui .getools button{padding:4px 8px;font-size:12px}body.mob #geui #ge
 (function(){
 const EVN=['on_touch','ontouch','on_touch_end','on_click'];const evOf=n=>n==='ontouch'?'on_touch':n;
 const partNamed=a=>{const n=nrmName(a);return n&&S.items.some(o=>o.cls==='Part'&&nrmName(o.name)===n);};
-/* split "#on_touch = X = cmd…" into two lines, and fix #lineN numbers that come after */
-function split(src){const L=String(src==null?'':src).split('\n');const out=[];const shift=[];
- L.forEach((l,i)=>{const m=l.match(/^(\s*)#\s*(on_touch_end|on_touch|ontouch|on_click)\s*=\s*([^=]+?)\s*=\s*(.+)$/i);
-  if(m&&!CMDS[m[3].trim().toLowerCase().replace(/\s+/g,'_')]){out.push(m[1]+'#'+m[2]+' = '+m[3].trim());out.push(m[1]+'#'+m[4].replace(/^#\s*/,''));shift.push(i+1);}else out.push(l);});
- if(!shift.length)return src;const nl=n=>n+shift.filter(k=>k<n).length+(shift.includes(n)?0:0);
- return out.map(l=>l.replace(/^(\s*#\s*line_?)(\d+)/i,(_,a,n)=>a+nl(+n))).join('\n');}
+/* one-line events: "#ontouch = self = delete = self", "#on_touch = delete = self", "#onclick = Door = explode" all work, with or without #end */
+const TGTW=['self','toucher','clicker','player','player_main','me','it','this'];
+const isTgt=w=>{const k=w.toLowerCase().replace(/\s+/g,'_');return TGTW.includes(k)||partNamed(w)||(typeof isTargetWord==='function'&&isTargetWord(k));};
+function shiftRefs(L,at){/* a line was put in after line "at" (1-based): #lineN numbers after it move down */return L.map(l=>l.replace(/^(\s*#\s*line_?)(\d+)/i,(m0,p,n)=>p+(+n>at?+n+1:n)));}
+let lastMap=null;
+function split(src){let L=String(src==null?'':src).split('\n');let O=L.map((_,i)=>i+1);const ins=(at,line)=>{L.splice(at,0,line);O.splice(at,0,O[at-1]||1);};
+ /* #onclick -> #on_click, #ontouchend -> #on_touch_end, #ontap -> #on_click */
+ L=L.map(l=>l.replace(/^(\s*)#\s*on_?(click|clicked|tap|tapped|touch_?end|touched)\b/i,(m0,sp,w)=>sp+'#on_'+({clicked:'click',tap:'click',tapped:'click',touched:'touch',touchend:'touch_end',touch_end:'touch_end'}[w.toLowerCase()]||w.toLowerCase())));
+ const one=[];
+ for(let i=0;i<L.length;i++){const m=L[i].match(/^(\s*)#\s*(on_touch_end|on_touch|ontouch|on_click)\s*=\s*(.+)$/i);if(!m)continue;const T=m[3].split(/\s*=\s*/);let arg='',cmd=null;
+  if(T.length>=2&&isTgt(T[0])){arg=T[0];cmd=T.slice(1).join(' = ');}
+  else{const k=T[0].toLowerCase().replace(/\s+/g,'_');if(CMDS[k]&&!CMDS[k].event&&!isTgt(T[0]))cmd=T.join(' = ');}
+  if(cmd==null)continue;const self=/^(self|me|it|this)$/i.test(arg);
+  L[i]=m[1]+'#'+m[2]+(arg&&!self?' = '+arg:'');ins(i+1,m[1]+'#'+cmd.replace(/^#\s*/,''));L=shiftRefs(L,i+1);one.push(i);i++;}
+ if(one.length){/* a one-line event that is never closed gets its own #end right after its command */
+  for(let k=one.length-1;k>=0;k--){const r=(_k0(L.join('\n')).res||[]);const ln=one[k]+1;if(r.some(x=>x.ln===ln&&/never closed/.test(x.msg))){ins(one[k]+2,(L[one[k]].match(/^\s*/)[0])+'#end');L=shiftRefs(L,one[k]+2);}}}
+ lastMap=O;return L.join('\n');}
 window.bxSplitEvents=split;
 const _c=compile;compile=function(src){return _c.call(this,split(src));};
-const _k=checkCode;checkCode=function(src){const s2=split(src);const r=_k.call(this,s2);const res=r.res=r.res||[];const lines=String(s2||'').split('\n');const isGui=codeObj&&codeObj.type&&!codeObj.cls;
+const _k=checkCode;const _k0=src=>_k.call(window,src);checkCode=function(src){const s2=split(src);const r=_k.call(this,s2);const res=r.res=r.res||[];const lines=String(s2||'').split('\n');const isGui=codeObj&&codeObj.type&&!codeObj.cls;
  lines.forEach((l,i)=>{const m=l.match(/^\s*#\s*(on_touch_end|on_touch|ontouch|on_click)\s*(?:=\s*(.*))?$/i);if(!m)return;const a=(m[2]||'').trim();
   if(a&&!partNamed(a)&&!(typeof isTargetWord==='function'&&isTargetWord(a.toLowerCase().replace(/\s+/g,'_'))))res.push({ln:i+1,lvl:'err',msg:`there is no part called "${a}". Use a part name from the Explorer`});
   if(!a&&isGui&&!/click/i.test(m[1]))res.push({ln:i+1,lvl:'err',msg:`a GUI thing can't be touched. Say which part: #${m[1]} = PartName`});});
- if(String(src).split('\n').length!==lines.length)res.forEach(x=>{x.msg=x.msg;});res.sort((a,b)=>a.ln-b.ln);return r;};
+ if(String(src).split('\n').length!==lines.length)res.forEach(x=>{x.msg=x.msg;});const M=lastMap;if(M)res.forEach(x=>{if(x.ln&&M[x.ln-1])x.ln=M[x.ln-1];});const seen=new Set();r.res=res.filter(x=>{const k=x.ln+'|'+x.msg;if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>a.ln-b.ln);return r;};
 /* when a part is touched or clicked, code anywhere that names it runs too */
 const _f=fire;fire=function(P,ev,arg,who){if(P&&P.kind==='part'&&P.handlers&&['on_touch','on_touch_end','on_click'].includes(ev)){const own=nrmName(P.o.name);const H=P.handlers;P.handlers=H.filter(h=>!(h.arg&&partNamed(h.arg)&&nrmName(h.arg)!==own));try{_f.apply(this,arguments);}finally{P.handlers=H;}}else _f.apply(this,arguments);if(!G||!P||P.kind!=='part'||!['on_touch','on_touch_end','on_click'].includes(ev))return;const n=nrmName(P.o.name);
  G.scripts.forEach(Q=>{if(Q===P)return;(Q.handlers||[]).forEach(h=>{if(evOf(h.ev)!==ev||!h.arg||nrmName(h.arg)!==n)return;Q.threads.push(newThread(h.ops,who));});});};
@@ -5732,6 +5743,25 @@ const gpath=P=>P&&P.guiEl&&P.o&&P.o.name;
 const _da=doAct;doAct=function(c,op){if(op&&(op.name==='visible'||op.name==='invisible')){const w=String(op.tgt||op.args||'').trim();
   if(w&&w.toLowerCase()!=='self'&&/\./.test(w)&&window.guiSet){guiSet(w,{hidden:op.name==='invisible'});return;}
   if(w&&w.toLowerCase()==='self'&&gpath(c.P)){guiSet(gpath(c.P),{hidden:op.name==='invisible'});return;}}return _da.apply(this,arguments);};
+})();
+
+/* words people use that were missing */
+(function(){if(!CMDS.message)reg('Useful','message','shows a message in the middle of the screen','#message = Welcome to my game!',(c,a)=>{showMsg(String(a||'').replace(/\{([a-z_0-9]+)\}/gi,(_,v)=>{const x=getVar(v);return x==null?'':x;}));});
+ if(!CMDS.leaderboard)reg('GUI','leaderboard','shows the leaderboard','#leaderboard',()=>{if(G)G.gui.lb=1;});
+ const al=(n,t)=>{if(!CMDS[n]&&CMDS[t])CMDS[n]=Object.assign({},CMDS[t],{help:'same as #'+t,ex:'#'+n+(CMDS[t].ex.includes('=')?' ='+CMDS[t].ex.split('=').slice(1).join('='):'')});};
+ al('remove','delete');al('show_message','message');al('announce','message');al('destroy_self','delete');al('hide_self','invisible');al('show_self','visible');})();
+
+/* properties as commands, the way they're named in Properties: #anchored = false, #cancollide = false, #position = 0,10,0 ... */
+(function(){const yes=a=>!/^(false|no|off|0|nope)$/i.test(String(a||'true').trim());const st=c=>c.P&&c.P.kind==='part'?c.P.st:null;
+ const P1=(n,help,ex,f)=>{if(!CMDS[n]||n==='anchored')reg('Look',n,help,ex,(c,a)=>{const s=st(c);if(s)f(s,a,c);});};
+ P1('anchored','true = stays still, false = falls and can be pushed','#anchored = false',(s,a,c)=>{if(yes(a)){s.Anchored=true;c.P.dyn=false;}else{s.Anchored=false;if(typeof makeDynamic==='function')makeDynamic(c.P);}});
+ P1('cancollide','false = you walk through it, true = solid','#cancollide = false',(s,a,c)=>{s.CanCollide=yes(a);c.P.collide=yes(a);});
+ if(!CMDS.can_collide)CMDS.can_collide=Object.assign({},CMDS.cancollide,{help:'same as #cancollide',ex:'#can_collide = false'});
+ P1('position','puts it at x,y,z','#position = 0,10,0',(s,a)=>{const v=parseVec(a,s.Position);s.Position=v;});
+ P1('orientation','turns it to x,y,z degrees','#orientation = 0,90,0',(s,a)=>{s.Orientation=parseVec(a,s.Orientation);});
+ if(!CMDS.rotation)CMDS.rotation=Object.assign({},CMDS.orientation,{help:'same as #orientation',ex:'#rotation = 0,90,0'});
+ /* "#move_to = 0,20,0 : 2s" : three numbers work as a place too */
+ {const C=CMDS.move_to;if(C){const f=C.fn;C.fn=(c,a)=>{const [w,t]=String(a||'').split(':');const m=String(w||'').trim().match(/^(-?[\d.]+)\s*[, ]\s*(-?[\d.]+)\s*[, ]\s*(-?[\d.]+)$/);if(m&&c.P&&c.P.kind==='part'){tween(c.P,'Position',[+m[1],+m[2],+m[3]],parseTime(t||'2'),'Sine','InOut');return;}return f(c,a);};}}
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
