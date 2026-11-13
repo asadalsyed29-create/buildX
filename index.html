@@ -5727,7 +5727,8 @@ body.mob #geui .getools button{padding:4px 8px;font-size:12px}body.mob #geui #ge
    and "#on_touch = Door = visible = self" (the event and its first command on one line) is the same as writing them on two lines */
 (function(){
 const EVN=['on_touch','ontouch','on_touch_end','on_click'];const evOf=n=>n==='ontouch'?'on_touch':n;
-const partNamed=a=>{const n=nrmName(a);return n&&S.items.some(o=>o.cls==='Part'&&nrmName(o.name)===n);};
+const partNamed=a=>{const n=nrmName(a);return n&&S.items.some(o=>(o.cls==='Part'||o.cls==='Model')&&nrmName(o.name)===n);};
+const namesOf=P=>{const L=[nrmName(P.o.name)];let pa=P.o&&byId(P.o.parent);let k=0;while(pa&&pa.cls==='Model'&&k++<20){L.push(nrmName(pa.name));pa=byId(pa.parent);}return L;};
 /* one-line events: "#ontouch = self = delete = self", "#on_touch = delete = self", "#onclick = Door = explode" all work, with or without #end */
 const TGTW=['self','toucher','clicker','player','player_main','me','it','this'];
 const isTgt=w=>{const k=w.toLowerCase().replace(/\s+/g,'_');return TGTW.includes(k)||partNamed(w)||(typeof isTargetWord==='function'&&isTargetWord(k));};
@@ -5735,13 +5736,13 @@ function shiftRefs(L,at){/* a line was put in after line "at" (1-based): #lineN 
 let lastMap=null;
 function split(src){let L=String(src==null?'':src).split('\n');let O=L.map((_,i)=>i+1);const ins=(at,line)=>{L.splice(at,0,line);O.splice(at,0,O[at-1]||1);};
  /* #onclick -> #on_click, #ontouchend -> #on_touch_end, #ontap -> #on_click */
- L=L.map(l=>l.replace(/^(\s*)#\s*on_?(click|clicked|tap|tapped|touch_?end|touched)\b/i,(m0,sp,w)=>sp+'#on_'+({clicked:'click',tap:'click',tapped:'click',touched:'touch',touchend:'touch_end',touch_end:'touch_end'}[w.toLowerCase()]||w.toLowerCase())));
+ L=L.map(l=>l.replace(/^(\s*)#\s*on[_\s]*(click|clicked|tap|tapped|touch[_\s]?end|touched|touch)\b/i,(m0,sp,w)=>sp+'#on_'+({clicked:'click',tap:'click',tapped:'click',touched:'touch',touchend:'touch_end',touch_end:'touch_end','touch end':'touch_end'}[w.toLowerCase()]||w.toLowerCase())));
  /* "#if = Frame77 = visible = then = delete = self" : the part before "then" is the check, the part after is the command */
  L=L.map(l=>{const m=l.match(/^(\s*)#\s*(if|unless|while|elseif)\s*=\s*(.+?)\s*=\s*then\s*(?:=\s*(.*))?$/i);if(!m)return l;
   let c=m[3].trim();const cp=c.split(/\s*=\s*/);if(cp.length===2)c=cp[0]+' == '+cp[1];else if(cp.length>2)c=cp[0]+' == '+cp.slice(1).join(' ');
   const rest=(m[4]||'').trim();if(!rest)return m[1]+'#'+m[2].toLowerCase()+' = '+c+' \u0001';return m[1]+'#'+m[2].toLowerCase()+' = '+c+' = #'+rest.replace(/^#\s*/,'');});
  const one=[];
- for(let i=0;i<L.length;i++){const m=L[i].match(/^(\s*)#\s*(on_touch_end|on_touch|ontouch|on_click)\s*=\s*(.+)$/i);if(!m)continue;const T=m[3].split(/\s*=\s*/);let arg='',cmd=null;
+ for(let i=0;i<L.length;i++){const m=L[i].match(/^(\s*)#\s*(on_touch_end|on_touch|ontouch|on_click)\s*=\s*(.+)$/i);if(!m)continue;const T=m[3].split(/\s*=\s*/).filter(x=>!/^then$/i.test(x.trim()));let arg='',cmd=null;
   if(T.length>=2&&isTgt(T[0])){arg=T[0];cmd=T.slice(1).join(' = ');}
   else{const k=T[0].toLowerCase().replace(/\s+/g,'_');if(CMDS[k]&&!CMDS[k].event&&!isTgt(T[0]))cmd=T.join(' = ');}
   if(cmd==null)continue;const self=/^(self|me|it|this)$/i.test(arg);
@@ -5765,8 +5766,10 @@ const _k=checkCode;const _k0=src=>_k.call(window,src);checkCode=function(src){co
   if(!a&&isGui&&!/click/i.test(m[1]))res.push({ln:i+1,lvl:'err',msg:`a GUI thing can't be touched. Say which part: #${m[1]} = PartName`});});
  if(String(src).split('\n').length!==lines.length)res.forEach(x=>{x.msg=x.msg;});const M=lastMap;if(M)res.forEach(x=>{if(x.ln&&M[x.ln-1])x.ln=M[x.ln-1];});const seen=new Set();r.res=res.filter(x=>{const k=x.ln+'|'+x.msg;if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>a.ln-b.ln);return r;};
 /* when a part is touched or clicked, code anywhere that names it runs too */
-const _f=fire;fire=function(P,ev,arg,who){if(P&&P.kind==='part'&&P.handlers&&['on_touch','on_touch_end','on_click'].includes(ev)){const own=nrmName(P.o.name);const H=P.handlers;P.handlers=H.filter(h=>!(h.arg&&partNamed(h.arg)&&nrmName(h.arg)!==own));try{_f.apply(this,arguments);}finally{P.handlers=H;}}else _f.apply(this,arguments);if(!G||!P||P.kind!=='part'||!['on_touch','on_touch_end','on_click'].includes(ev))return;const n=nrmName(P.o.name);
- G.scripts.forEach(Q=>{if(Q===P)return;(Q.handlers||[]).forEach(h=>{if(evOf(h.ev)!==ev||!h.arg||nrmName(h.arg)!==n)return;Q.threads.push(newThread(h.ops,who));});});};
+const _f=fire;fire=function(P,ev,arg,who){if(P&&P.kind==='part'&&P.handlers&&['on_touch','on_touch_end','on_click'].includes(ev)){const own=namesOf(P);const H=P.handlers;P.handlers=H.filter(h=>!(h.arg&&partNamed(h.arg)&&!own.includes(nrmName(h.arg))));try{_f.apply(this,arguments);}finally{P.handlers=H;}}else _f.apply(this,arguments);if(!G||!P||P.kind!=='part'||!['on_touch','on_touch_end','on_click'].includes(ev))return;const ns=namesOf(P);
+ G.scripts.forEach(Q=>{if(Q===P||(P.model&&Q===P.model))return;(Q.handlers||[]).forEach(h=>{if(evOf(h.ev)!==ev||!h.arg||!ns.includes(nrmName(h.arg)))return;
+  /* code in a Script has no body of its own, so there "self" means the thing that was touched/clicked */
+  const host=Q.kind==='script'?((P.model&&nrmName(h.arg)!==nrmName(P.o.name))?P.model:P):Q;host.threads=host.threads||[];host.handlers=host.handlers||[];host.signals=host.signals||[];host.funcs=host.funcs||{};if(!G.scripts.includes(host))G.scripts.push(host);host.threads.push(newThread(h.ops,who));});});};
 /* a part's own "#on_touch = ItsOwnName" still means itself; other names on a part's code should only run for that other part */
 const _f0=_f;
 /* #visible / #invisible on a GUI thing's own code (or = Gui.Thing) show and hide it */
