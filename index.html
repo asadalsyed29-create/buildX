@@ -2661,7 +2661,7 @@ function uniqueGuiName(b){const ns=new Set(guisD().map(g=>g.name));if(!ns.has(b)
 const hexA=(h,a)=>{const [r,g,b]=hex2rgb(COLOR_HEX(h)).map(v=>Math.round(v*255));return `rgba(${r},${g},${b},${a==null?1:a})`;};
 function interp(s){return String(s==null?'':s).replace(/\{([a-z_0-9]+)\}/gi,(_,v)=>{if(!G)return '{'+v+'}';const x=getVar(v);return x==null?'':(typeof x==='number'?+x.toFixed(2):x);});}
 /* ---- layer ---- */
-let layer=null;function getLayer(){if(!layer){layer=document.createElement('div');layer.id='bxgui';$('view').appendChild(layer);}const r=$('view').getBoundingClientRect();layer.style.setProperty('--gs',(Math.max(240,r.height)/720)+'px');return layer;}
+let layer=null;function getLayer(){if(!layer){layer=document.createElement('div');layer.id='bxgui';$('view').appendChild(layer);}const r=$('view').getBoundingClientRect();layer.style.setProperty('--gs',(Math.max(240,(window.bxGEPlay&&!G&&document.body.classList.contains('guiedit'))?bxGEPlay()[1]:r.height)/720)+'px');return layer;}
 function elStyle(el){const s=[];s.push(`left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${el.h}%;z-index:${el.z||1}`);if(el.rot)s.push(`rotate:${el.rot}deg`);return s.join(';');}
 function innerStyle(el){const s=[`background:${hexA(el.bg,el.alpha)}`,`border-radius:${el.radius||0}px`,`color:${COLOR_HEX(el.color||'#fff')}`,`font-family:${FONTS[el.font]||FONTS.Rounded}`,`font-size:calc(var(--gs) * ${el.size||18})`,`font-weight:${el.bold?800:500}`,`text-align:${el.align||'center'}`,`justify-content:${el.align==='left'?'flex-start':el.align==='right'?'flex-end':'center'}`];
  if(el.stroke)s.push(`border:${el.stroke}px solid ${COLOR_HEX(el.strokeColor||'#000')}`);if(el.shadow)s.push('box-shadow:0 6px 18px rgba(0,0,0,.45)');s.push(`--d:${el.dur||0.5}s`,`--ac:${COLOR_HEX(el.color||'#3d8bff')}`);if(window.bxShapeCSS){const c=bxShapeCSS(el);if(c)s.push(c);}return s.join(';');}
@@ -5634,13 +5634,13 @@ function place(){geFit();const E=GEo();const H=hand();const el=curEl();if(!E||E.
 window.bxGEHandles=place;
 /* while editing a GUI, shrink the screen preview into the free space so the top bar and side panel never cover it */
 function geFit(){const g=$('bxgui');if(!g)return;const on=document.body.classList.contains('guiedit')&&!document.body.classList.contains('playing')&&$('geui');
- if(!on){if(g.style.transform){g.style.transform='';g.style.transformOrigin='';}g.classList.remove('gefit');window.bxGEk=1;return;}
+ if(!on){if(g.style.transform||g.style.width){g.style.transform='';g.style.transformOrigin='';g.style.inset='';g.style.left='';g.style.top='';g.style.width='';g.style.height='';}g.classList.remove('gefit');window.bxGEk=1;return;}
  const vr=$('view').getBoundingClientRect();const top=document.querySelector('#geui .stop'),side=$('ge_side');
  const T=top&&top.offsetParent?Math.max(0,top.getBoundingClientRect().bottom-vr.top)+8:8;
  const sr=side&&side.offsetParent?side.getBoundingClientRect():null;const Rw=sr&&sr.width>0?Math.max(0,vr.right-sr.left)+8:8;
- const W=vr.width,H=vr.height;const aw=Math.max(60,W-Rw-8),ah=Math.max(60,H-T-8);const k=Math.min(1,aw/W,ah/H);const L=8+(aw-W*k)/2;
+ const PS=bxGEPlay(),W=PS[0],H=PS[1];if(g.style.width!==W+'px'){g.style.inset='auto';g.style.left='0px';g.style.top='0px';g.style.width=W+'px';g.style.height=H+'px';g.style.setProperty('--gs',(Math.max(240,H)/720)+'px');}const aw=Math.max(60,vr.width-Rw-8),ah=Math.max(60,vr.height-T-8);const k=Math.min(1,aw/W,ah/H);const L=8+(aw-W*k)/2;
  const tf=`translate(${L.toFixed(1)}px,${T.toFixed(1)}px) scale(${k.toFixed(4)})`;if(g.style.transform!==tf){g.style.transformOrigin='0 0';g.style.transform=tf;}g.classList.add('gefit');window.bxGEk=k;}
-window.bxGEFit=geFit;addEventListener('resize',()=>{geFit();setTimeout(place,50);});setInterval(()=>{if(document.body.classList.contains('guiedit')||$('bxgui')&&$('bxgui').style.transform){const k0=window.bxGEk;geFit();if(k0!==window.bxGEk)place();}},300);
+window.bxGEFit=geFit;window.bxGEPlay=()=>{const v=window.visualViewport;return [Math.round(innerWidth),Math.round(innerHeight)];};addEventListener('resize',()=>{geFit();setTimeout(place,50);});setInterval(()=>{if(document.body.classList.contains('guiedit')||$('bxgui')&&$('bxgui').style.transform){const k0=window.bxGEk;geFit();if(k0!==window.bxGEk)place();}},300);
 {const st=document.createElement('style');st.textContent='body.guiedit:not(.playing) #bxgui{outline:2px dashed rgba(255,255,255,.55);background:rgba(0,0,0,.18)}';document.head.appendChild(st);}
 function drag(e,onMove){e.preventDefault();e.stopPropagation();const el=curEl();if(!el)return;const node=document.querySelector(`#bxgui .gx[data-id="${el.id}"]`);if(!node)return;const pr=node.parentNode.getBoundingClientRect();
  const st={x:e.clientX,y:e.clientY,el:JSON.parse(JSON.stringify(el)),pr,w:node.offsetWidth*(window.bxGEk||1),h:node.offsetHeight*(window.bxGEk||1),nr:node.getBoundingClientRect()};let moved=false;
