@@ -6043,6 +6043,19 @@ const _pe=penOBB;penOBB=function(p,B){if(!B||!B.tm)return _pe.apply(this,argumen
 window.bxMeshTris=triData;
 })();
 
+/* ================= 27c. fixes: DiamondPlate shader didn't compile (parts vanished); coming back from the background restores the 3D view ================= */
+(function(){
+try{const i=15;if(FS_PARTS.bodies[i]&&/float d=abs\(g\.x\*0\.7\+g\.y\)/.test(FS_PARTS.bodies[i])){FS_PARTS.bodies[i]=FS_PARTS.bodies[i].replace(/\bd2\b/g,'dpB').replace(/\bd\b/g,'dpA');delete MPROG[i];}}catch(e){}
+/* phones throw away the 3D drawing memory when an app sits in the background. Keep the place and reload the view when that happens */
+const KEY='buildx-restore';let reloading=false;
+const keep=()=>{try{sessionStorage.setItem(KEY,snapState());}catch(e){}};
+const back=()=>{if(reloading)return;reloading=true;keep();location.reload();};
+cv.addEventListener('webglcontextlost',e=>{e.preventDefault();keep();},false);
+cv.addEventListener('webglcontextrestored',()=>back(),false);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){setTimeout(()=>{try{if(gl.isContextLost())back();}catch(e){}},300);}else keep();});
+const _ld=load;load=function(){let s=null;try{s=sessionStorage.getItem(KEY);sessionStorage.removeItem(KEY);}catch(e){}if(s){try{const d=JSON.parse(s);S=d.S;nextId=d.nextId;return true;}catch(e){}}return _ld.apply(this,arguments);};
+})();
+
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
 function init(){if(!load())defaultPlace();lastSnap=snapState();bind();let dv=null;try{dv=localStorage.getItem('buildx-device');}catch(e){}setDevice(dv||(matchMedia('(pointer:coarse)').matches?'mob':'pc'));if(!dv)$('devpick').style.display='flex';applySettings();refreshToolbox();refreshAll();out('👋 Welcome to BuildX! '+Object.keys(CMDS).length+' commands, '+CATALOG.length+' things to insert. Press ▶ Play to test.');startIcons();requestAnimationFrame(frame);}
 
