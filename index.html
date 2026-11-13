@@ -5586,7 +5586,6 @@ const isColl=o=>o&&o.cls==='Part'&&/(^|\n)\s*#\s*collectable\b/i.test(o.code||''
 const _rp2=refreshProps;refreshProps=function(){_rp2.apply(this,arguments);const o=typeof sel[0]==='number'?byId(sel[0]):null;if(!isColl(o))return;const pp=$('props');const P=o.props;
  const w=document.createElement('div');w.innerHTML=`<div class="ph" style="margin-top:6px">Collectable</div>`+propRow('Can hold it',`<input type="checkbox" data-c="CanHold"${P.CanHold!==false?' checked':''}>`)+
   propRow('In your hand',`<select data-c="HeldLook">${[['Part','The part itself'],['None','Nothing shown']].map(([v,l])=>`<option value="${v}"${(P.HeldLook||'Part')===v?' selected':''}>${l}</option>`).join('')}</select>`)+
-  propRow('Size in hand',`<input type="number" step="0.1" data-c="HeldSize" value="${P.HeldSize||1}">`)+propRow('Turn in hand',`<input type="number" step="15" data-c="HeldTurn" value="${P.HeldTurn||0}">`)+
   propRow('Hand color',`<input type="color" data-c="HeldColor" value="${COLOR_HEX(P.HeldColor||P.Color||'#ffffff')}"> <button class="tb" data-c-clr="1">Same as part</button>`)+
   `<div class="hint">Its picture in the inventory and hotbar is the Inventory icon above.</div>`;
  pp.appendChild(w);w.querySelectorAll('[data-c]').forEach(i=>i.addEventListener('change',()=>{const k=i.dataset.c;P[k]=i.type==='checkbox'?i.checked:i.type==='number'?(parseFloat(i.value)||0):i.value;commit();}));
@@ -5594,7 +5593,7 @@ const _rp2=refreshProps;refreshProps=function(){_rp2.apply(this,arguments);const
 if(CMDS.equip){const f=CMDS.equip.hum;CMDS.equip.hum=(c,h,a)=>{const n=String(a||'').split(':')[0].trim();if(n&&!canHold(n)){if(h===G.player)toastMsg(n+' can\'t be held');return;}return f(c,h,a);};}
 /* draw the held item in front of whoever holds it */
 const _dl=drawList;drawList=function(forPick){const L=_dl.apply(this,arguments);if(!G||forPick)return L;
- G.humans.forEach(h=>{if(!h||h.dead||h.invis||!h.bxHeld)return;const o=srcOf(h.bxHeld);if(!o)return;const P=o.props;if(P.HeldLook==='None')return;
+ G.humans.forEach(h=>{if(!h||h.dead||h.invis||!h.bxHeld)return;const o=srcOf(h.bxHeld);if(!o)return;const P=o.props;if(P.HeldLook==='None')return;if(window.bxHeldPush){bxHeldPush(L,h,o);return;}
   const hs=h.size||1;const y=(h.yaw||0)*Math.PI/180;const f=[Math.sin(y),0,Math.cos(y)],r=[Math.cos(y),0,-Math.sin(y)];const big=Math.max(...P.Size);const k=Math.min(1,1.6/big)*hs*(P.HeldSize||1);
   const st={Position:add(h.pos,add(add(mul(r,-1.9*hs),mul(f,0.9*hs)),[0,2.3*hs,0])),Orientation:[0,(h.yaw||0)+(P.HeldTurn||0),0],Size:P.Size.map(v=>v*k),Shape:P.Shape,Color:P.HeldColor||P.Color,Material:P.Material,Transparency:Math.min(P.Transparency||0,0.6),Reflectance:P.Reflectance||0};
   if(st.Shape==='Mesh')st.Shape='Block';pickTable.push({h});L.push({m:partMatrix(st),mesh:GEO[st.Shape]||GEO.Block,col:st.Color,mat:matIndex(st.Material),alpha:1-st.Transparency,refl:st.Reflectance,size:st.Size,pid:pickTable.length});});return L;};
@@ -6054,6 +6053,220 @@ cv.addEventListener('webglcontextlost',e=>{e.preventDefault();keep();},false);
 cv.addEventListener('webglcontextrestored',()=>back(),false);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){setTimeout(()=>{try{if(gl.isContextLost())back();}catch(e){}},300);}else keep();});
 const _ld=load;load=function(){let s=null;try{s=sessionStorage.getItem(KEY);sessionStorage.removeItem(KEY);}catch(e){}if(s){try{const d=JSON.parse(s);S=d.S;nextId=d.nextId;return true;}catch(e){}}return _ld.apply(this,arguments);};
+})();
+
+/* ================= 28. Items: item editor (where it's held, with Move/Turn/Size handles), usable / used up / turns into, Use button, item templates ================= */
+(function(){
+const srcOf=n=>window.bxItemSrc?bxItemSrc(n):null;
+const r20=x=>Math.round(x*20)/20;
+const isColl=o=>o&&o.cls==='Part'&&/(^|\n)\s*#\s*collectable\b/i.test(o.code||'');
+/* ---------- where an item sits in the hand ---------- */
+const DEFP=[-1.9,2.3,0.9];
+function gripOf(P){const g=P.Grip||{};const k=P.HeldSize||1;return {p:(g.p||DEFP).slice(),r:(g.r||[0,P.HeldTurn||0,0]).slice(),s:(g.s||[k,k,k]).slice()};}
+const baseK=P=>{const big=Math.max(...P.Size.map(Math.abs))||1;return Math.min(1,1.6/big);};
+function heldM(P,pos,yaw,hs,swing){const g=gripOf(P);const k=baseK(P)*hs;const size=P.Size.map((v,i)=>Math.abs(v)*k*Math.max(0.05,g.s[i]));
+ let m=M4.mul(M4.tr(...pos),eulerM([0,yaw,0]));m=M4.mul(m,M4.tr(g.p[0]*hs,g.p[1]*hs,g.p[2]*hs));if(swing)m=M4.mul(m,eulerM([swing,0,0]));m=M4.mul(m,eulerM(g.r));
+ return {m:M4.mul(m,M4.sc(...size)),rm:m,size};}
+function meshFor(P){if(P.Shape==='Mesh'&&window.bxMeshAPI){try{return bxMeshAPI.glMesh(bxMeshAPI.meshOf(P));}catch(e){}}return GEO[P.Shape]||GEO.Block;}
+function pushHeld(L,ref,P,pos,yaw,hs,swing){const H=heldM(P,pos,yaw,hs,swing);pickTable.push(ref);
+ L.push({m:H.m,mesh:meshFor(P),col:P.HeldColor||P.Color,mat:matIndex(P.Material),alpha:1-Math.min(P.Transparency||0,0.6),refl:P.Reflectance||0,size:H.size,glow:P.Material==='Neon'?0.6:0,pid:pickTable.length});}
+window.bxHeldPush=function(L,h,o){const P=o.props;let sw=0;if(h.bxSwing!=null&&G){const t=(G.t-h.bxSwing)/0.32;if(t>=0&&t<1)sw=-Math.sin(t*Math.PI)*80;}pushHeld(L,{h},P,h.pos,h.yaw||0,h.size||1,sw);};
+
+/* ---------- using an item while playing ---------- */
+const EFFECTS=[['None','Nothing',''],['Heal','Heal','Health'],['Speed','Run faster','Seconds'],['Jump','Jump higher','Seconds'],['Fly','Fly','Seconds'],['Shield','Can\'t be hurt','Seconds'],
+ ['Giant','Grow big','Seconds'],['Tiny','Shrink','Seconds'],['Invisible','Turn invisible','Seconds'],['Hit','Hit what\'s in front','Damage'],['Explode','Explosion in front','Size'],['Code','Run code','']];
+const EFDEF={Heal:25,Speed:5,Jump:5,Fly:5,Shield:5,Giant:5,Tiny:5,Invisible:5,Hit:25,Explode:8};
+const inv=h=>h.bxInv||(h.bxInv={});
+function takeOne(h,n){const I=inv(h);if(!(I[n]>0))return false;I[n]--;if(I[n]<=0){delete I[n];if(h.items)delete h.items[n];}if(h===G.player)G.vars['item_'+n.replace(/\s+/g,'_')]=I[n]||0;return true;}
+function holderP(){if(G.bxUseHolder&&G.parts.includes(G.bxUseHolder))return G.bxUseHolder;const P=spawnNew({Name:'Item use',Transparency:1,CanCollide:false,CanTouch:false,Anchored:true,Size:[0.2,0.2,0.2],Position:[0,-500,0]},'');if(!G.scripts.includes(P))G.scripts.push(P);G.bxUseHolder=P;return P;}
+function useItem(h){if(!G||!h||h.dead||!h.bxHeld)return;const n=h.bxHeld;const o=srcOf(n);if(!o)return;const P=o.props;if(!P.Usable)return;
+ const now=G.t||0;if(h.bxUseT!=null&&now-h.bxUseT<0.35)return;h.bxUseT=now;
+ const ef=P.UseEffect||'None';const amt=P.UseAmount!=null&&P.UseAmount!==''?+P.UseAmount:(EFDEF[ef]||0);const c={P:holderP(),who:h};const run=(k,a)=>{try{CMDS[k]&&CMDS[k].hum(c,h,String(a));}catch(e){}};
+ const y=(h.yaw||0)*D2R;const f=[Math.sin(y),0,Math.cos(y)];const hs=h.size||1;
+ if(ef==='Heal')run('heal',amt);else if(ef==='Speed')run('speed_for',amt);else if(ef==='Jump')run('big_jump_for',amt);else if(ef==='Fly')run('fly_for',amt);else if(ef==='Shield')run('invincible_for',amt);
+ else if(ef==='Giant')run('giant_for',amt);else if(ef==='Tiny')run('tiny_for',amt);else if(ef==='Invisible')run('invisible_for',amt);
+ else if(ef==='Hit'){h.bxSwing=now;(G.humans||[]).forEach(b=>{if(!b||b===h||b.dead||!b.pos)return;const d=sub(b.pos,h.pos);const dl=Math.hypot(d[0],d[2]);if(dl>7.5*hs||Math.abs(d[1])>5*hs)return;if(dl>0.5&&(d[0]*f[0]+d[2]*f[2])/dl<0.2)return;try{CMDS.damage.hum(c,b,String(amt));}catch(e){}});
+  (G.parts||[]).forEach(Q=>{if(!Q.alive||!Q.dyn||!Q.vel)return;const d=sub(Q.st.Position,h.pos);const dl=Math.hypot(d[0],d[2]);if(dl>7*hs||dl<0.3||(d[0]*f[0]+d[2]*f[2])/dl<0.2)return;Q.vel=add(Q.vel,add(mul(f,18),[0,6,0]));});}
+ else if(ef==='Explode'){const r=Math.max(2,amt);explodeAt(add(h.pos,add(mul(f,r*0.75+3*hs),[0,1.5*hs,0])),r);}
+ else if(ef==='Code'&&P.UseCode){try{const C=compile(String(P.UseCode).replace(/(^|\n)(\s*#?[a-z_]+\s*=\s*)user\b/gi,'$1$2toucher'));const Q=c.P;Q.threads.push(newThread(C.main,h,false));}catch(e){}}
+ if(ef!=='Hit')h.bxSwing=now;
+ fireAll('on_signal','use_'+n.replace(/\s+/g,'_'),h);
+ const to=P.TurnsInto&&String(P.TurnsInto).trim();
+ if(to){takeOne(h,n);try{CMDS.add_item.hum(c,h,to+' : 1');}catch(e){}const I=inv(h);const k=Object.keys(I).find(x=>nrmName(x)===nrmName(to));if(k){h.bxHeld=null;CMDS.equip.hum(c,h,k);}}
+ else if(P.Consumable){takeOne(h,n);if(!(inv(h)[n]>0)){h.bxHeld=null;if(h===G.player)G.vars.held_item='';}}
+ if(typeof sfx==='function')try{sfx('pop');}catch(e){}}
+window.bxUseItem=useItem;
+/* Use button: shows while the player holds a usable item */
+const ub=document.createElement('button');ub.id='bxuse';ub.textContent='USE';$('view').appendChild(ub);
+const css=document.createElement('style');css.textContent=`
+#bxuse{position:absolute;right:30px;bottom:140px;width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.5);color:#fff;font:900 14px system-ui,sans-serif;display:none;z-index:6;touch-action:manipulation;pointer-events:auto}
+body:not(.mob) #bxuse{right:24px;bottom:96px;border-radius:0;width:auto;height:auto;padding:10px 16px;background:rgba(20,22,28,.75)}
+#hed .stop,#hed .sside{border-radius:0;box-shadow:none}
+#hed .sside{width:300px}
+#hed .sec{border-top:1px solid var(--ln);padding:8px 0 4px}#hed .sec:first-child{border-top:0;padding-top:0}
+#hed .sec h4{margin:0 0 6px;font-size:12.5px;color:#fff}
+#hed .row{display:flex;align-items:center;gap:6px;margin:5px 0;flex-wrap:wrap}#hed .row>label{min-width:96px;color:var(--mu)}
+#hed .row select,#hed .row input[type=number]{flex:1;min-width:0}
+#hed .stop .xpill,#hed .b{font:inherit;font-size:12px;border:1px solid var(--ln);background:#1b1c20;color:var(--tx);padding:5px 9px;cursor:pointer;white-space:nowrap}
+#hed .stop .xpill.on{background:#3a4bd8;border-color:#5b6cff;color:#fff}
+#hed textarea{width:100%;box-sizing:border-box;min-height:64px;background:#1b1c20;border:1px solid var(--ln);color:var(--tx);font:12px ui-monospace,monospace;padding:5px;user-select:text}
+#hed .tpl{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}#hed .tpl button{font:inherit;font-size:11.5px;border:1px solid var(--ln);background:#1b1c20;color:var(--tx);padding:7px 4px;cursor:pointer}
+#hed .hint{color:var(--mu);font-size:11.5px;margin:4px 0}
+#hed .dim{opacity:.45;pointer-events:none}
+#bxhot .hs .ic i,#bxinvwin .iwc .ic i{display:block;width:70%;height:70%}
+@media (max-width:760px),(max-height:500px){#hed .sside{left:auto;right:6px;top:52px;bottom:6px;width:46%;height:auto}}`;document.head.appendChild(css);
+ub.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();if(G)useItem(G.player);});
+const _h=hud;hud=function(){_h.apply(this,arguments);let on=false;if(G&&G.player&&G.player.bxHeld&&!G.player.dead){const o=srcOf(G.player.bxHeld);on=!!(o&&o.props.Usable);}const v=on?'block':'none';if(ub.style.display!==v)ub.style.display=v;};
+const _sp=stopPlay;stopPlay=function(){ub.style.display='none';return _sp.apply(this,arguments);};
+addEventListener('keydown',e=>{if(!G||e.repeat||/INPUT|TEXTAREA/.test((document.activeElement||{}).tagName||''))return;if(e.key.toLowerCase()==='f'){useItem(G.player);}});
+
+/* ---------- item editor ---------- */
+let HE=null,camSave=null;
+const _st=window.bxStudio;window.bxStudio=()=>!!HE||(_st?_st():false);
+const look=()=>bxLookOf(S.avatar||{});
+const _pb=window.bxPreviewBuild;window.bxPreviewBuild=function(push){if(!HE)return _pb?_pb(push):false;const o=byId(HE.id);if(!o)return false;
+ push({m:partMatrix({Position:[0,-0.2,0],Orientation:[0,0,90],Size:[0.4,15,15]}),mesh:GEO.Cylinder,col:'#4b505c',mat:matIndex('Concrete'),alpha:1,size:[0.4,15,15]},{pv:1});
+ push({m:partMatrix({Position:[0,-0.25,0],Orientation:[0,0,90],Size:[0.4,15.8,15.8]}),mesh:GEO.Cylinder,col:'#2e313a',mat:1,alpha:1,size:[0.4,15.8,15.8]},{pv:1});
+ bxDrawRig(push,rigMatrices({pos:[0,0,0],yaw:0,scale:1,joints:{}}),look(),{pv:1},false,1,null);
+ if(o.props.HeldLook!=='None'){const P=o.props;const H=heldM(P,[0,0,0],0,1,HE.swing||0);push({m:H.m,mesh:meshFor(P),col:P.HeldColor||P.Color,mat:matIndex(P.Material),alpha:1-Math.min(P.Transparency||0,0.6),refl:P.Reflectance||0,size:H.size,glow:P.Material==='Neon'?0.6:0},{pv:1,held:1});}
+ return true;};
+const AXC=['#ff5a5a','#5ad16a','#4d8dff'],AXV=[[1,0,0],[0,1,0],[0,0,1]];let GZ=[];
+function frame(){const o=byId(HE.id);const P=o.props;const H=heldM(P,[0,0,0],0,1,0);const c=M4.xf(H.rm,[0,0,0]);
+ const ax=[0,1,2].map(i=>norm(sub(M4.xf(H.rm,AXV[i]),c)));const ext=H.size.map(v=>v/2);return {c,ax,ext,P};}
+function gizDraw(){GZ=[];if(!HE)return;const o=byId(HE.id);if(!o||o.props.HeldLook==='None')return;const F=frame();const dpr=ov.width/Math.max(1,ov.clientWidth);const tool=HE.tool;const C=project(F.c);if(!C)return;
+ oc.save();oc.lineCap='round';
+ if(tool==='turn'){const R=Math.max(1.1,Math.max(...F.ext)+0.35);[0,1,2].forEach(ax=>{const u=AXV[(ax+1)%3],v=AXV[(ax+2)%3];const pts=[];for(let i=0;i<=56;i++){const a=i/56*Math.PI*2;pts.push(project(add(F.c,add(mul(u,Math.cos(a)*R),mul(v,Math.sin(a)*R)))));}
+   oc.strokeStyle=AXC[ax];oc.lineWidth=3.2*dpr;oc.beginPath();let st=false;pts.forEach(q=>{if(!q){st=false;return;}if(!st){oc.moveTo(q[0],q[1]);st=true;}else oc.lineTo(q[0],q[1]);});oc.stroke();GZ.push({kind:'ring',ax,pts:pts.filter(Boolean),c:C});});}
+ else{[0,1,2].forEach(ax=>{[1,-1].forEach(sg=>{if(tool==='move'&&sg<0)return;const dir=tool==='size'?F.ax[ax]:AXV[ax];const Lw=tool==='size'?F.ext[ax]+0.6:Math.max(1.4,Math.max(...F.ext)+0.7);const E=project(add(F.c,mul(dir,Lw*sg)));if(!E)return;
+   oc.strokeStyle=AXC[ax];oc.fillStyle=AXC[ax];oc.lineWidth=3*dpr;oc.beginPath();oc.moveTo(C[0],C[1]);oc.lineTo(E[0],E[1]);oc.stroke();
+   if(tool==='move'){const d=norm([E[0]-C[0],E[1]-C[1],0]);const n=[-d[1],d[0]];const hh=13*dpr;oc.beginPath();oc.moveTo(E[0]+d[0]*hh,E[1]+d[1]*hh);oc.lineTo(E[0]+n[0]*hh*0.55,E[1]+n[1]*hh*0.55);oc.lineTo(E[0]-n[0]*hh*0.55,E[1]-n[1]*hh*0.55);oc.closePath();oc.fill();}
+   else{const hh=7*dpr;oc.fillRect(E[0]-hh,E[1]-hh,hh*2,hh*2);oc.strokeStyle='#fff';oc.lineWidth=1.5*dpr;oc.strokeRect(E[0]-hh,E[1]-hh,hh*2,hh*2);}
+   GZ.push({kind:tool,ax,sg,c:C,e:E,len:Lw});});});
+  if(tool==='size'){const hh=8*dpr;oc.fillStyle='#fff';oc.fillRect(C[0]-hh,C[1]-hh,hh*2,hh*2);oc.strokeStyle='#1b1c20';oc.lineWidth=2*dpr;oc.strokeRect(C[0]-hh,C[1]-hh,hh*2,hh*2);GZ.push({kind:'all',c:C,e:C});}
+  else{oc.fillStyle='#fff';oc.beginPath();oc.arc(C[0],C[1],4*dpr,0,7);oc.fill();}}
+ oc.restore();}
+function gizHit(x,y){const dpr=ov.width/Math.max(1,ov.clientWidth);let best=null,bd=20*dpr;GZ.forEach(g=>{let d=1e9;if(g.kind==='ring')g.pts.forEach(q=>{d=Math.min(d,Math.hypot(q[0]-x,q[1]-y));});
+  else if(g.kind==='all')d=Math.hypot(g.c[0]-x,g.c[1]-y)-4*dpr;
+  else{d=Math.hypot(g.e[0]-x,g.e[1]-y);const vx=g.e[0]-g.c[0],vy=g.e[1]-g.c[1],l2=vx*vx+vy*vy;if(l2>1){const t=clamp(((x-g.c[0])*vx+(y-g.c[1])*vy)/l2,0.3,1);d=Math.min(d,Math.hypot(g.c[0]+vx*t-x,g.c[1]+vy*t-y)+4*dpr);}}if(d<bd){bd=d;best=g;}});return best;}
+const _dov=drawOverlay;drawOverlay=function(){if(HE){if(ov.width!==cv.width||ov.height!==cv.height){ov.width=cv.width;ov.height=cv.height;}oc.clearRect(0,0,ov.width,ov.height);HANDLES=[];try{gizDraw();}catch(e){}return;}_dov();};
+const _fly=flyCam;flyCam=function(dt){if(HE){if(HE.swingT!=null){HE.swingT+=dt;const t=HE.swingT/0.32;HE.swing=t<1?-Math.sin(t*Math.PI)*80:0;if(t>=1)HE.swingT=null;}return;}return _fly.apply(this,arguments);};
+function setCam(){const ph=innerWidth<=760||innerHeight<=500;Object.assign(cam,{tgt:[-1,2,0.6],dist:ph?11:10,pitch:0.18,yaw:-1.2,fov:50});
+ /* slide the view so the character sits in the free space left of the panel */const eye=camEye();const fw=norm(sub(cam.tgt,eye));const right=norm(cross(fw,[0,1,0]));cam.tgt=add(cam.tgt,mul(right,cam.dist*(ph?0.22:0.16)));}
+/* pointer handling */
+const vw=$('view');const ptrs=new Map();let drag=null;
+function vxy(e){const r=cv.getBoundingClientRect(),d=cv.width/r.width;return [(e.clientX-r.left)*d,(e.clientY-r.top)*d];}
+vw.addEventListener('pointerdown',e=>{if(!HE)return;if(e.target!==ov&&e.target!==cv)return;e.stopImmediatePropagation();e.preventDefault();try{vw.setPointerCapture(e.pointerId);}catch(er){}ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+ if(ptrs.size===2){const [a,b]=[...ptrs.values()];drag={mode:'pinch',d0:Math.hypot(a[0]-b[0],a[1]-b[1]),dist0:cam.dist};return;}
+ const [x,y]=vxy(e);const o=byId(HE.id);if(!o)return;const g=gizHit(x,y);const G0=gripOf(o.props);
+ if(g){drag={mode:'giz',g,x,y,g0:G0};return;}
+ const pk=pick(x,y);if(pk&&pk.held){drag={mode:'body',x:e.clientX,y:e.clientY,g0:G0};return;}
+ drag={mode:'orbit',x:e.clientX,y:e.clientY};},true);
+vw.addEventListener('pointermove',e=>{if(!HE||!ptrs.has(e.pointerId))return;e.stopImmediatePropagation();const prev=ptrs.get(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(!drag)return;
+ if(drag.mode==='pinch'){if(ptrs.size<2)return;const [a,b]=[...ptrs.values()];const d=Math.hypot(a[0]-b[0],a[1]-b[1]);cam.dist=clamp(drag.dist0*drag.d0/Math.max(10,d),5,40);return;}
+ if(drag.mode==='orbit'){cam.yaw-=(e.clientX-prev[0])*0.008;cam.pitch=clamp(cam.pitch+(e.clientY-prev[1])*0.006,-0.6,1.35);return;}
+ const o=byId(HE.id);if(!o)return;const P=o.props;const g0=drag.g0;const g={p:g0.p.slice(),r:g0.r.slice(),s:g0.s.slice()};
+ if(drag.mode==='body'){const r=cv.getBoundingClientRect();const F=frame();const eye=EYE||camEye();const fw=norm(sub(cam.tgt,eye));const right=norm(cross(fw,[0,1,0]));const up=cross(right,fw);
+  const dist=len(sub(F.c,eye));const perPx=2*dist*Math.tan(cam.fov*D2R/2)/r.height;const d=add(mul(right,(e.clientX-drag.x)*perPx),mul(up,-(e.clientY-drag.y)*perPx));g.p=g0.p.map((v,i)=>r20(v+d[i]));}
+ else{const G1=drag.g;const [x,y]=vxy(e);
+  if(G1.kind==='ring'){const C=G1.c;if(Math.hypot(x-C[0],y-C[1])<6)return;const lx=drag.lx==null?drag.x:drag.lx,ly=drag.ly==null?drag.y:drag.ly;let da=(Math.atan2(y-C[1],x-C[0])-Math.atan2(ly-C[1],lx-C[0]))/D2R;if(da>180)da-=360;if(da<-180)da+=360;drag.lx=x;drag.ly=y;
+   if(drag.sgn==null){const eye=EYE||camEye();drag.sgn=dot(sub(eye,frame().c),AXV[G1.ax])>0?-1:1;}drag.acc=(drag.acc||0)+da;g.r[G1.ax]=Math.round((g0.r[G1.ax]+drag.acc*drag.sgn)/5)*5;}
+  else if(G1.kind==='all'){const k=Math.max(0.05,1-(y-drag.y)/(ov.height*0.4));g.s=g0.s.map(v=>r20(Math.max(0.05,v*k)));}
+  else{const sv=[G1.e[0]-G1.c[0],G1.e[1]-G1.c[1]];const sl=Math.hypot(sv[0],sv[1])||1;const pix=((x-drag.x)*sv[0]+(y-drag.y)*sv[1])/sl;const amt=pix*(G1.len/sl);
+   if(G1.kind==='move')g.p[G1.ax]=r20(g0.p[G1.ax]+amt);
+   else{const base=P.Size[G1.ax]*baseK(P)||1;g.s[G1.ax]=r20(Math.max(0.05,g0.s[G1.ax]+amt*2/base*0.5));}}}
+ P.Grip=g;delete P.HeldSize;delete P.HeldTurn;drag.changed=true;},true);
+const endP=e=>{if(!HE||!ptrs.has(e.pointerId))return;e.stopImmediatePropagation();ptrs.delete(e.pointerId);if(drag&&drag.changed){commit();uiNums();}if(ptrs.size===0)drag=null;else if(drag&&drag.mode==='pinch')drag=null;};
+vw.addEventListener('pointerup',endP,true);vw.addEventListener('pointercancel',endP,true);
+vw.addEventListener('wheel',e=>{if(!HE)return;e.preventDefault();e.stopImmediatePropagation();cam.dist=clamp(cam.dist*(e.deltaY>0?1.1:0.9),5,40);},{capture:true,passive:false});
+
+/* ---------- the panel ---------- */
+function names(o){const out=[];const seen=new Set();S.items.forEach(x=>{if(x.cls!=='Part'||x.id===o.id)return;if(!(x.parent==='Storage'||isColl(x)))return;const k=nrmName(x.name);if(seen.has(k))return;seen.add(k);out.push(x.name);});return out;}
+function openHE(o){if(G)return;if(window.bxCloseStudios)bxCloseStudios();closeHE(true);HE={id:o.id,tool:'move'};camSave=clone(cam);setCam();document.body.classList.add('studio');
+ const d=document.createElement('div');d.id='hed';d.className='studio-ui';
+ d.innerHTML=`<div class="stop"><button class="tb sdone" id="he_done">Done</button><span class="stt">Item: ${esc(o.name)}</span>${[['move','Move'],['turn','Turn'],['size','Size']].map(([k,l])=>`<button class="xpill${k==='move'?' on':''}" data-t="${k}">${l}</button>`).join('')}<button class="xpill" id="he_try">Try using it</button><button class="xpill" id="he_reset">Back to normal</button></div><div class="sside" id="he_side"></div>`;
+ $('view').appendChild(d);d.addEventListener('pointerdown',e=>{if(e.target.closest('.stop,.sside'))e.stopPropagation();});
+ d.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{HE.tool=b.dataset.t;d.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b));});
+ $('he_done').onclick=()=>closeHE();$('he_try').onclick=()=>{HE.swingT=0;};
+ $('he_reset').onclick=()=>{const P=byId(HE.id).props;delete P.Grip;delete P.HeldSize;delete P.HeldTurn;commit();uiNums();};
+ sideUI();if(window.bxFitStudio)try{bxFitStudio();}catch(e){}}
+function closeHE(quiet){if(!HE)return;HE=null;const d=$('hed');if(d)d.remove();if(camSave){Object.assign(cam,camSave);camSave=null;}document.body.classList.remove('studio');if(!quiet){refreshAll();}}
+window.bxItemEditor=openHE;window.bxHE=()=>HE;
+const _cs=window.bxCloseStudios;window.bxCloseStudios=function(){closeHE(true);return _cs&&_cs.apply(this,arguments);};
+const _tp=togglePlay;togglePlay=function(){closeHE(true);return _tp.apply(this,arguments);};
+const _rs=restore;restore=function(){const r=_rs.apply(this,arguments);if(HE){if(!byId(HE.id))closeHE();else sideUI();}return r;};
+function uiNums(){const el=$('he_nums');if(!el||!HE)return;const o=byId(HE.id);if(!o)return;const g=gripOf(o.props);el.textContent=`Place ${g.p.map(v=>v.toFixed(2)).join(', ')}  ·  Turn ${g.r.map(v=>Math.round(v)).join(', ')}  ·  Size ${g.s.map(v=>v.toFixed(2)).join(', ')}`;}
+function sideUI(){const el=$('he_side');if(!el||!HE)return;const o=byId(HE.id);if(!o)return;const P=o.props;const st=el.scrollTop;const ef=P.UseEffect||'None';const E=EFFECTS.find(x=>x[0]===ef)||EFFECTS[0];const coll=isColl(o);
+ const opt=(v,l,cur)=>`<option value="${esc(v)}"${v===cur?' selected':''}>${esc(l)}</option>`;
+ el.innerHTML=`<div class="sec"><h4>Holding</h4>
+  ${coll?'':`<div class="hint">This part isn't an item yet. Make it collectable so players can pick it up.</div><div class="row"><button class="b" id="he_coll">Make it collectable</button></div>`}
+  <div class="row"><label>Can hold it</label><input type="checkbox" data-k="CanHold"${P.CanHold!==false?' checked':''}></div>
+  <div class="row"><label>In your hand</label><select data-k="HeldLook">${opt('Part','The part itself',P.HeldLook||'Part')}${opt('None','Nothing shown',P.HeldLook||'Part')}</select></div>
+  <div class="row"><label>Hand color</label><input type="color" data-k="HeldColor" value="${COLOR_HEX(P.HeldColor||P.Color||'#ffffff')}"><button class="b" id="he_samecol">Same as part</button></div>
+  <div class="hint">Pick Move, Turn or Size at the top, then drag the handles. You can also drag the item itself. Drag empty space to turn the view.</div>
+  <div class="hint" id="he_nums"></div></div>
+ <div class="sec"><h4>Using it</h4>
+  <div class="row"><label>Usable</label><input type="checkbox" data-k="Usable"${P.Usable?' checked':''}></div>
+  <div class="${P.Usable?'':'dim'}">
+  <div class="row"><label>When used</label><select data-k="UseEffect">${EFFECTS.map(([v,l])=>opt(v,l,ef)).join('')}</select></div>
+  ${E[2]?`<div class="row"><label>${E[2]}</label><input type="number" step="1" data-k="UseAmount" value="${P.UseAmount!=null&&P.UseAmount!==''?P.UseAmount:(EFDEF[ef]||0)}"></div>`:''}
+  ${ef==='Code'?`<div class="hint">Code that runs when it's used. "user" is the player using it, e.g. #heal = user : 10</div><textarea data-k="UseCode" spellcheck="false">${esc(P.UseCode||'')}</textarea>`:''}
+  <div class="row"><label>Used up</label><input type="checkbox" data-k="Consumable"${P.Consumable?' checked':''}><span class="hint">It goes away after one use</span></div>
+  <div class="row"><label>Turns into</label><select data-k="TurnsInto">${opt('','Nothing (stays the same)',P.TurnsInto||'')}${names(o).map(n=>opt(n,n,P.TurnsInto||'')).join('')}</select></div>
+  <div class="hint">Turns into swaps it for another part or item (from Storage or another collectable), like a full bottle into an empty one.</div>
+  <div class="hint">While playing, tap USE (or press F) to use the item you're holding. Scripts can react too: #on_signal = use_${esc(o.name.replace(/\s+/g,'_'))}</div></div></div>
+ <div class="sec"><h4>Templates</h4><div class="hint">Turn this part into a ready-made item. Its look, how it's held and what it does all change.</div><div class="tpl">${TPL.filter(t=>!t.hide).map(t=>`<button data-tpl="${esc(t.n)}">${esc(t.n)}</button>`).join('')}</div></div>`;
+ el.scrollTop=st;uiNums();
+ el.querySelectorAll('[data-k]').forEach(i=>{const ev=i.tagName==='TEXTAREA'?'change':i.type==='color'?'input':'change';i.addEventListener(ev,()=>{const k=i.dataset.k;let v=i.type==='checkbox'?i.checked:i.type==='number'?(i.value===''?'':+i.value):i.value;
+  if(k==='CanHold'&&v)delete P.CanHold;else P[k]=v;if(k==='UseEffect')delete P.UseAmount;if(k==='TurnsInto'&&!v)delete P.TurnsInto;commit();if(['Usable','UseEffect','HeldLook','TurnsInto'].includes(k))sideUI();});});
+ const sc=$('he_samecol');if(sc)sc.onclick=()=>{delete P.HeldColor;commit();sideUI();};
+ const cb=$('he_coll');if(cb)cb.onclick=()=>{o.code=(o.code?o.code.replace(/\s+$/,'')+'\n':'')+'#collectable';commit();sideUI();};
+ el.querySelectorAll('[data-tpl]').forEach(b=>b.onclick=async()=>{const t=TPL.find(x=>x.n===b.dataset.tpl);if(!t)return;if(!await bxConfirm('Turn '+o.name+' into '+t.n+'?'))return;applyTpl(o,t);addPartners(t);commit();closeHE(true);openHE(o);});}
+
+/* ---------- templates ---------- */
+const BOTTLE=[[0.44,-0.5],[0.47,-0.42],[0.47,0.02],[0.4,0.12],[0.16,0.24],[0.15,0.4],[0.19,0.44],[0.19,0.5]];
+const TPL=[
+ {n:'Apple',sh:'Spin',q:{Sides:24,pts:[[0.12,-0.5],[0.34,-0.44],[0.47,-0.22],[0.49,0.06],[0.43,0.3],[0.27,0.45],[0.08,0.5]]},size:[1.5,1.4,1.5],col:'#c8202a',mat:'SmoothPlastic',refl:0.08,grip:{p:[-1.9,2.1,1.0],r:[0,0,0],s:[1,1,1]},use:{Usable:true,UseEffect:'Heal',UseAmount:20,Consumable:true}},
+ {n:'Health Potion',sh:'Spin',q:{Sides:20,pts:BOTTLE},size:[1.1,1.9,1.1],col:'#e0263f',mat:'Glass',tr:0.15,refl:0.3,grip:{p:[-1.9,2.2,1.0],r:[0,0,0],s:[1,1,1]},use:{Usable:true,UseEffect:'Heal',UseAmount:50,TurnsInto:'Empty Bottle'},partners:['Empty Bottle']},
+ {n:'Empty Bottle',hide:1,sh:'Spin',q:{Sides:20,pts:BOTTLE},size:[1.1,1.9,1.1],col:'#cfe8ee',mat:'Glass',tr:0.55,refl:0.35,grip:{p:[-1.9,2.2,1.0],r:[0,0,0],s:[1,1,1]},use:{}},
+ {n:'Speed Drink',sh:'Spin',q:{Sides:22,pts:[[0.42,-0.5],[0.47,-0.44],[0.47,0.42],[0.38,0.5]]},size:[0.9,1.5,0.9],col:'#27c24c',mat:'Foil',refl:0.2,grip:{p:[-1.9,2.1,1.0],r:[0,0,0],s:[1,1,1]},use:{Usable:true,UseEffect:'Speed',UseAmount:6,TurnsInto:'Empty Can'},partners:['Empty Can']},
+ {n:'Empty Can',hide:1,sh:'Spin',q:{Sides:22,pts:[[0.42,-0.5],[0.47,-0.44],[0.47,0.42],[0.38,0.5]]},size:[0.9,1.5,0.9],col:'#9aa1a8',mat:'Foil',refl:0.2,grip:{p:[-1.9,2.1,1.0],r:[0,0,0],s:[1,1,1]},use:{}},
+ {n:'Jump Potion',sh:'Spin',q:{Sides:20,pts:BOTTLE},size:[1.1,1.9,1.1],col:'#2f6bff',mat:'Glass',tr:0.15,refl:0.3,grip:{p:[-1.9,2.2,1.0],r:[0,0,0],s:[1,1,1]},use:{Usable:true,UseEffect:'Jump',UseAmount:8,TurnsInto:'Empty Bottle'},partners:['Empty Bottle']},
+ {n:'Sword',sh:'Outline',q:{'Front size':100,pts:[[0,0.5],[0.09,0.38],[0.09,-0.18],[0.38,-0.18],[0.38,-0.25],[0.05,-0.25],[0.05,-0.46],[0.09,-0.5],[-0.09,-0.5],[-0.05,-0.46],[-0.05,-0.25],[-0.38,-0.25],[-0.38,-0.18],[-0.09,-0.18],[-0.09,0.38]]},size:[1.6,5,0.22],col:'#c9ced6',mat:'Foil',refl:0.35,grip:{p:[-1.9,2.4,1.6],r:[0,90,35],s:[2.3,2.3,2.3]},use:{Usable:true,UseEffect:'Hit',UseAmount:25}},
+ {n:'Torch',sh:'Spin',q:{Sides:16,pts:[[0.14,-0.5],[0.16,0.2],[0.42,0.32],[0.46,0.5]]},size:[0.9,3,0.9],col:'#6b4426',mat:'Wood',grip:{p:[-1.9,2.4,1.1],r:[20,0,0],s:[1.5,1.5,1.5]},use:{Usable:true,UseEffect:'None',TurnsInto:'Lit Torch'},partners:['Lit Torch']},
+ {n:'Lit Torch',hide:1,sh:'Spin',q:{Sides:16,pts:[[0.14,-0.5],[0.16,0.2],[0.42,0.32],[0.46,0.5]]},size:[0.9,3,0.9],col:'#ff8a1f',mat:'Neon',grip:{p:[-1.9,2.4,1.1],r:[20,0,0],s:[1.5,1.5,1.5]},use:{Usable:true,UseEffect:'None',TurnsInto:'Torch'}},
+ {n:'Bomb',sh:'Sphere',q:{Detail:20},size:[1.4,1.4,1.4],col:'#1f2023',mat:'SmoothPlastic',refl:0.15,grip:{p:[-1.9,2.1,1.0],r:[0,0,0],s:[1,1,1]},use:{Usable:true,UseEffect:'Explode',UseAmount:8,Consumable:true}},
+ {n:'Mushroom',sh:'Spin',q:{Sides:22,pts:[[0.13,-0.5],[0.15,-0.08],[0.47,0.0],[0.47,0.12],[0.36,0.33],[0.18,0.46],[0.04,0.5]]},size:[1.4,1.4,1.4],col:'#d6312b',mat:'SmoothPlastic',grip:{p:[-1.9,2.1,1.0],r:[0,0,0],s:[1,1,1]},use:{Usable:true,UseEffect:'Giant',UseAmount:6,Consumable:true}},
+ {n:'Feather',sh:'Outline',q:{'Front size':100,pts:[[0,0.5],[0.22,0.3],[0.3,0],[0.22,-0.28],[0.03,-0.4],[0.03,-0.5],[-0.03,-0.5],[-0.03,-0.4],[-0.22,-0.28],[-0.3,0],[-0.22,0.3]]},size:[1.1,2.4,0.12],col:'#f2efe6',mat:'SmoothPlastic',grip:{p:[-1.9,2.4,1.0],r:[0,90,20],s:[1,1,1]},use:{Usable:true,UseEffect:'Fly',UseAmount:6,Consumable:true}},
+ {n:'Key',sh:'Outline',q:{'Front size':100,pts:[[-0.1,0.5],[0.1,0.5],[0.22,0.38],[0.22,0.18],[0.1,0.06],[0.06,0.06],[0.06,-0.26],[0.2,-0.26],[0.2,-0.34],[0.06,-0.34],[0.06,-0.4],[0.22,-0.4],[0.22,-0.5],[-0.06,-0.5],[-0.06,0.06],[-0.1,0.06],[-0.22,0.18],[-0.22,0.38]]},size:[0.9,2,0.18],col:'#e9b52a',mat:'Foil',refl:0.3,grip:{p:[-1.9,2.3,1.0],r:[0,90,0],s:[1,1,1]},use:{}},
+ {n:'Coin',sh:'Cylinder',q:{Sides:28,Rows:1},size:[1.4,0.22,1.4],col:'#f2c230',mat:'Foil',refl:0.3,grip:{p:[-1.9,2.3,1.0],r:[90,0,0],s:[1,1,1]},use:{}}];
+window.bxItemTemplates=TPL;
+function shade(hex,k){const c=COLOR_HEX(hex).slice(1);const v=[0,2,4].map(i=>parseInt(c.substr(i,2),16));return '#'+v.map(x=>Math.max(0,Math.min(255,Math.round(k>0?x+(255-x)*k:x*(1+k)))).toString(16).padStart(2,'0')).join('');}
+/* a flat picture of the item for the inventory and hotbar, drawn from its own outline */
+function tplIcon(t){const W=t.size[0],H=t.size[1];const sc=84/Math.max(W,H);const w=W*sc,h=H*sc;const ox=50-w/2,oy=50-h/2;const X=x=>(ox+(x+0.5)*w).toFixed(1),Y=y=>(oy+(0.5-y)*h).toFixed(1);let body='';
+ const g=`<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0.35"><stop offset="0" stop-color="${shade(t.col,0.38)}"/><stop offset="0.55" stop-color="${COLOR_HEX(t.col)}"/><stop offset="1" stop-color="${shade(t.col,-0.42)}"/></linearGradient></defs>`;
+ const st=`fill="url(#g)" stroke="${shade(t.col,-0.6)}" stroke-width="2.5" stroke-linejoin="round"`;
+ if(t.sh==='Spin'){const pr=t.q.pts.slice().sort((a,b)=>a[1]-b[1]);const R=pr.map(([x,y])=>X(x)+','+Y(y));const L=pr.slice().reverse().map(([x,y])=>X(-x)+','+Y(y));body=`<polygon points="${[...R,...L].join(' ')}" ${st}/>`;}
+ else if(t.sh==='Outline'){body=`<polygon points="${t.q.pts.map(([x,y])=>X(x)+','+Y(y)).join(' ')}" ${st}/>`;}
+ else if(t.sh==='Sphere'){body=`<circle cx="50" cy="52" r="40" ${st}/><path d="M50 12 q6 -8 14 -6" fill="none" stroke="#8a6a3a" stroke-width="4" stroke-linecap="round"/>`;}
+ else{body=`<ellipse cx="50" cy="56" rx="42" ry="20" fill="${shade(t.col,-0.45)}"/><ellipse cx="50" cy="48" rx="42" ry="20" ${st}/><ellipse cx="50" cy="48" rx="30" ry="13" fill="none" stroke="${shade(t.col,-0.35)}" stroke-width="2"/>`;}
+ const hl=t.mat==='Glass'||t.mat==='Foil'?`<path d="M${(ox+w*0.3).toFixed(1)} ${(oy+h*0.25).toFixed(1)} v${(h*0.45).toFixed(1)}" stroke="rgba(255,255,255,.55)" stroke-width="3" stroke-linecap="round"/>`:'';
+ return 'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${g}${body}${hl}</svg>`);}
+function applyTpl(o,t){const P=o.props;o.name=t.n;Object.assign(P,{Shape:'Mesh',Size:t.size.slice(),Color:t.col,Material:t.mat,Transparency:t.tr||0,Reflectance:t.refl||0});
+ delete P.HeldColor;delete P.HeldSize;delete P.HeldTurn;['Usable','UseEffect','UseAmount','Consumable','TurnsInto','UseCode'].forEach(k=>delete P[k]);Object.assign(P,JSON.parse(JSON.stringify(t.use||{})));
+ P.Grip=JSON.parse(JSON.stringify(t.grip));P.Icon=tplIcon(t);delete P.IconShapes;const q=Object.assign({},JSON.parse(JSON.stringify(t.q)));if(window.bxMeshGen&&window.bxMeshShapes){const d=bxMeshShapes[t.sh];if(d)Object.entries(d.p).forEach(([k,v])=>{if(q[k]==null)q[k]=v[0];});bxMeshGen(o,t.sh,q);}
+ delete P.MeshStretch;}
+function addPartners(t){(t.partners||[]).forEach(n=>{if(S.items.some(x=>x.cls==='Part'&&nrmName(x.name)===nrmName(n)))return;const pt=TPL.find(x=>x.n===n);if(!pt)return;const o=mk('Part',n,{Anchored:true,CanCollide:false,Position:[0,pt.size[1]/2,0]},'Storage','');applyTpl(o,pt);S.items.push(o);(pt.partners||[]).forEach(()=>{});});}
+function newItem(t){if(G)return;const eye=camEye();const fw=norm(sub(cam.tgt,eye));const at=[Math.round(cam.tgt[0]),0,Math.round(cam.tgt[2])];
+ const o=mk('Part',t.n,{Anchored:true,CanCollide:false,Position:[at[0],t.size[1]/2+1.5,at[2]]},'Workspace','#collectable\n#spin = 60\n#bob = 0.4');applyTpl(o,t);S.items.push(o);addPartners(t);commit();sel=[o.id];refreshAll();toastEd(t.n+' added. Touch it while playing to pick it up.');}
+window.bxApplyItemTemplate=(o,n)=>{const t=TPL.find(x=>x.n===n);if(t){applyTpl(o,t);addPartners(t);commit();}};
+window.bxNewItem=n=>{const t=TPL.find(x=>x.n===n);if(t)newItem(t);};
+const SCR=window.bxScripts;if(SCR)TPL.filter(t=>!t.hide).forEach(t=>SCR.push({c:'Items',n:t.n,i:'<img src="'+tplIcon(t)+'" alt="" style="width:100%;height:100%;object-fit:contain">',d:'A ready-made item: '+(EFFECTS.find(e=>e[0]===(t.use.UseEffect||'None'))||EFFECTS[0])[1].toLowerCase()+(t.use.Consumable?', used up':'')+(t.use.TurnsInto?', turns into '+t.use.TurnsInto:''),code:'',kit:()=>newItem(t)}));
+
+/* ---------- Properties: open the item editor ---------- */
+const _rp=refreshProps;refreshProps=function(){_rp.apply(this,arguments);const o=typeof sel[0]==='number'?byId(sel[0]):null;if(!o||o.cls!=='Part'||G)return;const pp=$('props');if(!pp)return;
+ const w=document.createElement('div');w.innerHTML=`<div class="pr"><label>Item</label><div><button class="tb" id="pr_item">${isColl(o)?'Item editor':'Make it an item'}</button></div></div>`;
+ const cb=pp.querySelector('#pcode');if(cb)cb.before(...w.childNodes);else pp.append(...w.childNodes);
+ $('pr_item').onclick=()=>{if(!isColl(o)){o.code=(o.code?o.code.replace(/\s+$/,'')+'\n':'')+'#collectable';commit();}openHE(o);};};
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
