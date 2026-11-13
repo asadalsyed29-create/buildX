@@ -331,7 +331,7 @@ body.playing.ctrl #ctrlexit{display:block}body.playing.ctrl.mob #downb{display:g
    <button class="hud" id="jumpb">JUMP</button>
    <button class="hud" id="stopb">■ Stop</button>
    <button class="hud" id="pmbtn" aria-label="Menu"><i></i><i></i><i></i></button>
-   <div class="hud" id="pmenu"><div id="pmtoggles" style="display:none"></div><button class="pmb" id="pm_inv">Inventory</button><button class="pmb" id="pm_reset" style="display:none"></button><button class="pmb" id="pm_stop" style="display:none"></button></div>
+   <div class="hud" id="pmenu"><div id="pmtoggles" style="display:none"></div><button class="pmb" id="pm_inv"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M3 7h14v10H3z M7 7V4h6v3 M3 11h14" fill="none" stroke="#fff" stroke-width="2"/></svg>Inventory</button><button class="pmb" id="pm_reset" style="display:none"></button><button class="pmb" id="pm_stop" style="display:none"></button></div>
    <button class="hud" id="downb">⬇</button><button class="hud" id="ctrlexit">✕ Stop flying</button>
    <div id="gmenu"></div>
   </div>
@@ -5507,8 +5507,8 @@ const invUI=()=>Object.assign({},INV_DEF,S.invUI||{});const hotUI=()=>Object.ass
 const css=document.createElement('style');css.textContent=`
 #pmbtn{width:46px;height:42px;padding:9px 10px!important;}body.playing #pmbtn{display:flex;}#pmbtn{flex-direction:column;justify-content:space-between;align-items:stretch;background:#2b2d33!important;border:2px solid #16171a!important}
 #pmbtn i{display:block;height:3px;background:#fff}
-#pmenu{width:180px!important;padding:4px!important;background:#2b2d33!important;border:2px solid #16171a!important;top:58px!important}
-#pmenu .pmb{margin:0!important;text-align:left;background:transparent!important;padding:10px 12px!important;font-size:14px}#pmenu .pmb:hover{background:#3a3d44!important}
+#pm_reset,#pm_stop{display:none!important}#pmenu>*:not(#pm_inv){display:none!important}#pmenu{width:190px!important;padding:4px!important;background:#2b2d33!important;border:2px solid #16171a!important;top:58px!important}
+#pmenu .pmb{margin:0!important;text-align:left;background:#3d414a!important;border:2px solid #5a5f6a!important;padding:11px 12px!important;font-size:15px;font-weight:800;cursor:pointer;display:flex!important;align-items:center;gap:10px}#pmenu .pmb:hover,#pmenu .pmb:active{background:#4b505b!important}#pmenu .pmb svg{flex:none}
 #bxinvwin{position:absolute;z-index:30;left:50%;top:50%;transform:translate(-50%,-50%);display:none;flex-direction:column;color:#fff;font:600 13px system-ui,sans-serif;pointer-events:auto;max-width:calc(100% - 24px);max-height:calc(100% - 24px)}
 #bxinvwin.open{display:flex}#bxinvwin .iwh{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;font-size:16px;font-weight:800}
 #bxinvwin .iwx{width:30px;height:30px;border:none;background:#c0392b;color:#fff;font-weight:900;font-size:15px;cursor:pointer}
@@ -5522,7 +5522,7 @@ const css=document.createElement('style');css.textContent=`
 #bxhot .hs{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:#fff;font:700 11px system-ui,sans-serif;border:2px solid;box-sizing:border-box;touch-action:manipulation;user-select:none}
 #bxhot .hs .ic{width:58%;height:58%;display:flex;align-items:center;justify-content:center}#bxhot .hs .ic>*{max-width:100%;max-height:100%}#bxhot .hs .ic img{width:100%;height:100%;object-fit:contain}
 #bxhot .hs small{position:absolute;left:4px;top:2px;font-size:10px}#bxhot .hs b{position:absolute;right:4px;bottom:2px;font-size:11px}#bxhot .hs span{font-size:9px;max-width:92%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.mob.playing #bxhot:not(.top):not(.left):not(.right){bottom:190px}`;document.head.appendChild(css);
+@media (orientation:portrait){body.mob.playing #bxhot:not(.top):not(.left):not(.right){bottom:190px}}`;document.head.appendChild(css);
 const win=document.createElement('div');win.id='bxinvwin';$('view').appendChild(win);const hot=document.createElement('div');hot.id='bxhot';$('view').appendChild(hot);
 win.addEventListener('pointerdown',e=>e.stopPropagation());hot.addEventListener('pointerdown',e=>e.stopPropagation());
 /* the part an item came from (Storage first), for its icon and settings */
@@ -5688,6 +5688,20 @@ function sync(){const u=IDS.map(i=>document.getElementById(i)).find(Boolean);
 new MutationObserver(recs=>{if(recs.every(r=>dock.contains(r.target)))return;sync();}).observe($('view'),{childList:true,subtree:true});
 new ResizeObserver(()=>{if(owner)document.body.style.setProperty('--dockH',dock.offsetHeight+'px');}).observe(dock);
 window.bxAnimDock=dock;})();
+
+/* ---------- phones: BuildX works sideways only ---------- */
+(function(){const css=document.createElement('style');css.textContent=`
+#bxturn{position:fixed;inset:0;z-index:9999;background:#1d1f24;color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;font:700 18px system-ui,sans-serif;text-align:center;padding:24px}
+#bxturn svg{width:96px;height:96px}
+@media (orientation:portrait){body.mob #bxturn{display:flex}}`;document.head.appendChild(css);
+ const d=document.createElement('div');d.id='bxturn';d.innerHTML=`<svg viewBox="0 0 96 96" fill="none" stroke="#fff" stroke-width="4"><rect x="30" y="14" width="36" height="62"/><path d="M44 68h8"/><path d="M70 30c12 4 18 14 16 28" /><path d="M80 54l6 6 4-8"/></svg><div>Turn your phone sideways</div><div style="font-weight:500;font-size:14px;color:#aab">BuildX only works in landscape.</div>`;document.body.appendChild(d);
+ const lock=()=>{try{if(document.body.classList.contains('mob')&&screen.orientation&&screen.orientation.lock)screen.orientation.lock('landscape').catch(()=>{});}catch(e){}};
+ addEventListener('pointerdown',lock,{once:true});lock();})();
+(function(){const css=document.createElement('style');css.textContent=`
+body.mob #geui .stop{flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;padding:4px 6px!important;gap:4px!important}body.mob #geui .stop::-webkit-scrollbar{display:none}
+body.mob #geui .stop>*,body.mob #geui .gadd>*{flex:none}body.mob #geui .gadd{display:flex;flex-wrap:nowrap;gap:4px}
+body.mob #geui .stop .tb{padding:3px 7px!important;font-size:11px!important;min-height:0}body.mob #geui .stop .tb svg{width:16px;height:16px}
+body.mob #geui .getools button{padding:4px 8px;font-size:12px}body.mob #geui #ge_name{width:110px}#geui #ge_done{order:-1}`;document.head.appendChild(css);})();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
 function init(){if(!load())defaultPlace();lastSnap=snapState();bind();let dv=null;try{dv=localStorage.getItem('buildx-device');}catch(e){}setDevice(dv||(matchMedia('(pointer:coarse)').matches?'mob':'pc'));if(!dv)$('devpick').style.display='flex';applySettings();refreshToolbox();refreshAll();out('👋 Welcome to BuildX! '+Object.keys(CMDS).length+' commands, '+CATALOG.length+' things to insert. Press ▶ Play to test.');startIcons();requestAnimationFrame(frame);}
