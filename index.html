@@ -5325,7 +5325,16 @@ function cubeMesh(n){n=n||2;const v=[],t=[],key={};const P=(x,y,z)=>{const k=[x,
   for(let j=0;j<n;j++)for(let i=0;i<n;i++){t.push([id[j][i],id[j][i+1],id[j+1][i+1]]);t.push([id[j][i],id[j+1][i+1],id[j+1][i]]);}});
  return {v,t};}
 const DEF=cubeMesh(2);
-const meshOf=p=>p.Mesh&&p.Mesh.v&&p.Mesh.t?p.Mesh:DEF;
+const meshRaw=p=>p.Mesh&&p.Mesh.v&&p.Mesh.t?p.Mesh:DEF;
+/* how a mesh behaves when its part is stretched: 'Stretch' (everything stretches), 'Keep shape' (keeps the look it was made with), 'Keep edges' (the outer edges keep their size, only the middle stretches) */
+const EB=0.2;
+function stretchFns(p){const mode=p.MeshStretch||'Stretch';const S=p.Size||[4,4,4];if(mode==='Stretch')return null;const Rf=(p.MeshRef&&p.MeshRef.length===3?p.MeshRef:S).map(x=>Math.max(0.05,+x||1));
+ if(mode==='Keep shape'){const u=Math.min(...S.map((x,i)=>x/Rf[i]));const c=S.map((x,i)=>Rf[i]*u/Math.max(1e-4,x));return {f:v=>v.map((x,i)=>x*c[i]),g:v=>v.map((x,i)=>x/c[i])};}
+ const ax=i=>{const s2=S[i],r=Rf[i];if(s2<=r+1e-6)return [x=>x,x=>x];const inner=0.5-EB,innerW=s2/2-EB*r;
+  return [x=>{const a=Math.abs(x),sg=x<0?-1:1;const w=a>=inner?s2/2-(0.5-a)*r:a/inner*innerW;return sg*w/s2;},x=>{const a=Math.abs(x)*s2,sg=x<0?-1:1;const u=a>=innerW?0.5-(s2/2-a)/r:a/innerW*inner;return sg*u;}];};
+ const A=[0,1,2].map(ax);return {f:v=>v.map((x,i)=>A[i][0](x)),g:v=>v.map((x,i)=>A[i][1](x))};}
+const meshOf=p=>{const M=meshRaw(p);const F=stretchFns(p);if(!F)return M;return {v:M.v.map(F.f),t:M.t,o:M.o};};
+window.bxMeshShape=meshOf;window.bxStretchFns=stretchFns;
 
 /* ---- texture sheet: a cross of 6 squares (top / left front right back / bottom). Each triangle uses the square its side faces ---- */
 const CELL={'+y':[1,0],'-x':[0,1],'+z':[1,1],'+x':[2,1],'-z':[3,1],'-y':[1,2]};const SW=1024,SH=768;
@@ -5340,7 +5349,7 @@ const TRI=M=>M.t.map(tr=>{const a=M.v[tr[0]],b=M.v[tr[1]],c=M.v[tr[2]];if(!a||!b
 const GCACHE=new Map();
 function glMesh(M){const k=JSON.stringify(M);let g=GCACHE.get(k);if(g)return g;const P=[],N=[],U=[],I=[];const B=bounds(M);
  /* make every triangle face outward (away from the middle) */const mid=[0,1,2].map(i=>(B.mn[i]+B.mx[i])/2);
- TRI(M).forEach(T=>{let {a,b,c,n}=T;if(dot(n,sub(T.ctr,mid))<0){[b,c]=[c,b];n=mul(n,-1);}const nn=norm(n);const side=sideOf(nn);const s=P.length/3;[a,b,c].forEach(p=>{P.push(...p);N.push(...nn);U.push(...uvOf(p,side,B));});I.push(s,s+1,s+2);});
+ TRI(M).forEach(T=>{let {a,b,c,n}=T;if(!M.o&&dot(n,sub(T.ctr,mid))<0){[b,c]=[c,b];n=mul(n,-1);}const nn=norm(n);const side=sideOf(nn);const s=P.length/3;[a,b,c].forEach(p=>{P.push(...p);N.push(...nn);U.push(...uvOf(p,side,B));});I.push(s,s+1,s+2);});
  if(!I.length){g=GEO.Block;}else g=mesh(P,N,U,I);GCACHE.set(k,g);if(GCACHE.size>80){GCACHE.delete(GCACHE.keys().next().value);}return g;}
 const TCACHE={};
 function texOf(url){if(TCACHE[url])return TCACHE[url];const t=gl.createTexture();TCACHE[url]=t;gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,255,255,255]));
@@ -5397,33 +5406,34 @@ const css=document.createElement('style');css.textContent=`
 function meOpen(o){if(window.bxCloseStudios)bxCloseStudios();meClose();if(!o.props.Mesh)o.props.Mesh=JSON.parse(JSON.stringify(DEF));ME={id:o.id,mode:'move',sel:null};
  const d=document.createElement('div');d.id='mshe';d.className='studio-ui xa';
  d.innerHTML=`<div class="stop"><button class="tb sdone" id="me_done">Done</button><span class="stt">Mesh points</span>${[['move','Move points'],['add','Add point'],['del','Delete point']].map(([k,l])=>`<button class="xpill${k==='move'?' on':''}" data-m="${k}">${l}</button>`).join('')}<button class="xpill" id="me_sub">More points</button><button class="xpill" id="me_reset">Back to a cube</button></div><svg class="pts"></svg><div class="mhint" id="me_hint"></div>`;
- $('view').appendChild(d);d.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{ME.mode=b.dataset.m;d.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('on',x===b));meHint();});
+ $('view').appendChild(d);d.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{ME.mode=(ME.mode===b.dataset.m&&b.dataset.m!=='move')?'move':b.dataset.m;const cur=d.querySelector('[data-m="'+ME.mode+'"]');d.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('on',x===cur));meHint();});
  $('me_done').onclick=meClose;$('me_reset').onclick=async()=>{if(!await bxConfirm('Make this mesh a plain cube again?'))return;const p=byId(ME.id);p.props.Mesh=JSON.parse(JSON.stringify(DEF));commit();};
  $('me_sub').onclick=()=>{const p=byId(ME.id);p.props.Mesh=subdivide(meshOf(p.props));commit();};
  const svg=d.querySelector('svg.pts');svg.onpointerdown=e=>meDown(e);sel=[o.id];refreshAll();meHint();meLoop();}
 function meHint(){const h=$('me_hint');if(h)h.textContent=ME.mode==='move'?'Drag a point to move it. Drag empty space to turn the camera.':ME.mode==='add'?'Tap the mesh where you want a new point.':'Tap a point to delete it.';$('mshe').querySelector('svg.pts').classList.toggle('add',ME.mode==='add');}
 function partM(o){return partMatrix(o.props);}
 function toScreen(p){const c=VP;const x=c[0]*p[0]+c[4]*p[1]+c[8]*p[2]+c[12],y=c[1]*p[0]+c[5]*p[1]+c[9]*p[2]+c[13],w=c[3]*p[0]+c[7]*p[1]+c[11]*p[2]+c[15];if(w<=0.01)return null;const r=$('view').getBoundingClientRect();return [(x/w*0.5+0.5)*r.width,(0.5-y/w*0.5)*r.height,w];}
-function meLoop(){if(!ME)return;const o=byId(ME.id);if(!o||!inWorkspace(o)){meClose();return;}const M=meshOf(o.props);const m=partM(o);const svg=document.querySelector('#mshe svg.pts');if(svg&&VP){
- const pts=M.v.map(v=>toScreen(M4.xf(m,v)));svg.innerHTML=pts.map((q,i)=>q?`<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="${ME.sel===i?9:7}" fill="${ME.sel===i?'#ff8a1f':'#fff'}" stroke="${ME.mode==='del'?'#e5484d':'#3d5afe'}" stroke-width="3" data-v="${i}"/>`:'').join('');}
+function meLoop(){if(!ME)return;const o=byId(ME.id);if(!o||!inWorkspace(o)){meClose();return;}const M=meshOf(o.props);const m=partM(o);const svg=document.querySelector('#mshe svg.pts');ME.selSet=ME.selSet||new Set();if(svg&&VP){
+ const pts=M.v.map(v=>toScreen(M4.xf(m,v)));const PR=pts.length>400?3:pts.length>120?4.5:7,SW2=pts.length>120?1.5:3;svg.innerHTML=pts.map((q,i)=>q&&(!ME.hidePts||ME.sel===i)?`<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="${ME.sel===i?PR+2:PR}" fill="${ME.sel===i?'#ff8a1f':'#fff'}" stroke="${ME.mode==='del'?'#e5484d':'#3d5afe'}" stroke-width="${SW2}" data-v="${i}"/>`:'').join('');}
  requestAnimationFrame(meLoop);}
 function meDown(e){const o=byId(ME.id);if(!o)return;const t=e.target.closest&&e.target.closest('[data-v]');const M=o.props.Mesh;
- if(ME.mode==='add'){e.preventDefault();e.stopPropagation();const hit=rayHit(o,e);if(!hit){toastEd('Tap on the mesh itself');return;}const nv=M.v.length;M.v.push(hit.p.map(x=>Math.round(x*1000)/1000));const [a,b,c]=M.t[hit.ti];M.t.splice(hit.ti,1,[a,b,nv],[b,c,nv],[c,a,nv]);ME.sel=nv;commit();return;}
+ if(ME.mode==='add'){e.preventDefault();e.stopPropagation();const hit=rayHit(o,e);if(!hit){toastEd('Tap on the mesh itself');return;}const nv=M.v.length;M.v.push((stretchFns(o.props)||{g:x=>x}).g(hit.p).map(x=>Math.round(x*1000)/1000));const [a,b,c]=M.t[hit.ti];M.t.splice(hit.ti,1,[a,b,nv],[b,c,nv],[c,a,nv]);ME.sel=nv;commit();return;}
  if(!t)return;e.preventDefault();e.stopPropagation();const vi=+t.dataset.v;
  if(ME.mode==='del'){if(M.v.length<=4){toastEd('A mesh needs at least 4 points');return;}deletePoint(M,vi);ME.sel=null;commit();return;}
- ME.sel=vi;const m=partM(o),inv=M4.inv(m);const wp=M4.xf(m,M.v[vi]);const sc=toScreen(wp);const r=$('view').getBoundingClientRect();
+ ME.sel=vi;const F=stretchFns(o.props)||{f:x=>x,g:x=>x};const m=partM(o),inv=M4.inv(m);const wp=M4.xf(m,F.f(M.v[vi]));
+ const mir=ME.mirror?(()=>{const q=M.v[vi];if(Math.abs(q[0])<0.01)return -2;let bj=-1,bd=0.03;M.v.forEach((w,j)=>{if(j===vi)return;const d=Math.hypot(w[0]+q[0],w[1]-q[1],w[2]-q[2]);if(d<bd){bd=d;bj=j;}});return bj;})():-1;const sc=toScreen(wp);const r=$('view').getBoundingClientRect();
  const eye=EYE||camEye();const fw=norm(sub(cam.tgt,eye));const right=norm(cross(fw,[0,1,0]));const up=cross(right,fw);const perPx=2*sc[2]*Math.tan(cam.fov*D2R/2)/r.height;const v0=M.v[vi].slice();const x0=e.clientX,y0=e.clientY;
- const mv=ev=>{const dx=(ev.clientX-x0)*perPx,dy=-(ev.clientY-y0)*perPx;const w=add(wp,add(mul(right,dx),mul(up,dy)));const l=M4.xf(inv,w);M.v[vi]=l.map(x=>Math.round(x*1000)/1000);};
+ const mv=ev=>{const dx=(ev.clientX-x0)*perPx,dy=-(ev.clientY-y0)*perPx;const w=add(wp,add(mul(right,dx),mul(up,dy)));const l=F.g(M4.xf(inv,w));M.v[vi]=l.map(x=>Math.round(x*1000)/1000);if(mir===-2)M.v[vi][0]=0;else if(mir>=0)M.v[mir]=[-M.v[vi][0],M.v[vi][1],M.v[vi][2]];};
  const upF=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',upF);if(M.v[vi].join()!==v0.join())commit();};addEventListener('pointermove',mv);addEventListener('pointerup',upF);}
 function rayHit(o,e){const r=cv.getBoundingClientRect();const nx=(e.clientX-r.left)/r.width*2-1,ny=1-(e.clientY-r.top)/r.height*2;const a=M4.xf(IVP,[nx,ny,-1]),b=M4.xf(IVP,[nx,ny,1]);const m=partM(o),inv=M4.inv(m);
- const ro=M4.xf(inv,a),rd=sub(M4.xf(inv,b),ro);const M=o.props.Mesh;let best=null;
+ const ro=M4.xf(inv,a),rd=sub(M4.xf(inv,b),ro);const M=meshOf(o.props);let best=null;
  M.t.forEach((tr,ti)=>{const A=M.v[tr[0]],B=M.v[tr[1]],C=M.v[tr[2]];const e1=sub(B,A),e2=sub(C,A),pv=cross(rd,e2),det=dot(e1,pv);if(Math.abs(det)<1e-9)return;const tv=sub(ro,A);const u=dot(tv,pv)/det;if(u<0||u>1)return;const qv=cross(tv,e1);const v=dot(rd,qv)/det;if(v<0||u+v>1)return;const t=dot(e2,qv)/det;if(t>0&&(!best||t<best.t))best={t,ti,p:add(ro,mul(rd,t))};});return best;}
 function deletePoint(M,vi){/* merge the point into its nearest neighbour */const nb=new Set();M.t.forEach(t=>{if(t.includes(vi))t.forEach(x=>{if(x!==vi)nb.add(x);});});let to=null,bd=1e9;nb.forEach(j=>{const d=len(sub(M.v[j],M.v[vi]));if(d<bd){bd=d;to=j;}});if(to==null)return;
  M.t=M.t.map(t=>t.map(x=>x===vi?to:x)).filter(t=>t[0]!==t[1]&&t[1]!==t[2]&&t[0]!==t[2]);M.v.splice(vi,1);M.t=M.t.map(t=>t.map(x=>x>vi?x-1:x));}
 function subdivide(M){/* split every triangle in 4 (shared edge points) */const v=M.v.map(p=>p.slice()),t=[],mid={};const md=(a,b)=>{const k=a<b?a+'_'+b:b+'_'+a;if(mid[k]==null){mid[k]=v.length;v.push([0,1,2].map(i=>Math.round((v[a][i]+v[b][i])/2*1000)/1000));}return mid[k];};
  if(M.t.length>1500){toastEd('That mesh already has lots of points');return M;}M.t.forEach(([a,b,c])=>{const ab=md(a,b),bc=md(b,c),ca=md(c,a);t.push([a,ab,ca],[ab,b,bc],[ca,bc,c],[ab,bc,ca]);});return {v,t};}
 function meClose(){if(!ME)return;ME=null;const d=$('mshe');if(d)d.remove();}
-window.bxMeshEditor=meOpen;window.bxME=()=>ME;window.bxMeshTemplate=o=>templateCanvas(meshOf(o.props));
+window.bxMeshEditor=meOpen;window.bxMeshAPI={DEF,cubeMesh,subdivide,meshRaw,meshOf,glMesh,meHint:()=>meHint()};window.bxME=()=>ME;window.bxMeshTemplate=o=>templateCanvas(meshOf(o.props));
 const _cs=window.bxCloseStudios;window.bxCloseStudios=function(){meClose();return _cs&&_cs.apply(this,arguments);};
 const _tp=togglePlay;togglePlay=function(){meClose();return _tp.apply(this,arguments);};
 
@@ -5441,7 +5451,7 @@ const _rp=refreshProps;refreshProps=function(){_rp.apply(this,arguments);const p
    the shape is wrapped in many flat sides (a 98-sided hull), so pulled-out points block you too */
 const DIRS=(()=>{const d=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];const n=92,ga=Math.PI*(3-Math.sqrt(5));for(let i=0;i<n;i++){const y=1-(i+0.5)/n*2,r=Math.sqrt(1-y*y),a=i*ga;d.push([Math.cos(a)*r,y,Math.sin(a)*r]);}return d;})();
 const HC=new Map();
-function meshHull(st){const M=st.Mesh;const k=JSON.stringify(M.v)+'|'+st.Size.join(',');let H=HC.get(k);if(H)return H;
+function meshHull(st){const M=window.bxMeshShape?bxMeshShape(st):st.Mesh;const k=JSON.stringify(M.v)+'|'+st.Size.join(',');let H=HC.get(k);if(H)return H;
  const V=M.v.map(p=>[p[0]*st.Size[0],p[1]*st.Size[1],p[2]*st.Size[2]]);const h=[0,1,2].map(i=>Math.max(1e-3,...V.map(p=>Math.abs(p[i]))));
  const ld=DIRS.map(n=>Math.max(...V.map(p=>dot(n,p))));const ext=new Set();DIRS.forEach(n=>{let b=-1e9,bi=0;V.forEach((p,i)=>{const s=dot(n,p);if(s>b){b=s;bi=i;}});ext.add(bi);});
  H={h,lp:DIRS,ld,vtx:[...ext].map(i=>[V[i][0]/h[0],V[i][1]/h[1],V[i][2]/h[2]])};HC.set(k,H);if(HC.size>200)HC.delete(HC.keys().next().value);return H;}
@@ -5484,15 +5494,15 @@ window.bxMeshHull=meshHull;
 /* ---------- Explorer: buttons for add / copy / delete / rename (no holding needed) ---------- */
 (function(){const css=document.createElement('style');css.textContent=`
 #bxexbar{display:flex;flex-wrap:wrap;gap:4px;padding:6px 6px 4px;border-bottom:1px solid var(--ln);background:var(--pn)}
-#bxexbar button{flex:1 1 auto;min-width:0;background:var(--pn2);color:var(--tx);border:1px solid var(--ln);padding:7px 6px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+#bxexbar button.on{background:#3a4bd8;border-color:#5b6cff;color:#fff}#bxexbar button{flex:1 1 auto;min-width:0;background:var(--pn2);color:var(--tx);border:1px solid var(--ln);padding:7px 6px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 #bxexbar button:disabled{opacity:.4;cursor:default}#bxexbar button.del{color:#ff8a8a}`;document.head.appendChild(css);
  const numSel=()=>sel.filter(id=>typeof id==='number'&&byId(id));
  function bar(){const ex=$('explorer');if(!ex)return;let b=$('bxexbar');const show=['World','Scripts','Storage'].includes(exTab)&&!G;
   if(!show){if(b)b.remove();return;}if(!b){b=document.createElement('div');b.id='bxexbar';ex.parentNode.insertBefore(b,ex);}
-  const n=numSel().length;b.innerHTML=`<button data-x="add">${exTab==='Scripts'?'Add script':'Add part'}</button><button data-x="dup"${n?'':' disabled'}>Duplicate</button><button data-x="ren"${n===1?'':' disabled'}>Rename</button><button class="del" data-x="del"${n?'':' disabled'}>Delete</button><button data-x="more"${n?'':' disabled'}>More</button>`;
+  const n=numSel().length;b.innerHTML=`<button data-x="add">${exTab==='Scripts'?'Add script':'Add part'}</button><button data-x="dup"${n?'':' disabled'}>Duplicate</button><button data-x="ren"${n===1?'':' disabled'}>Rename</button><button class="del" data-x="del"${n?'':' disabled'}>Delete</button><button data-x="more"${n?'':' disabled'}>More</button><button data-x="multi" class="${multiSel?'on':''}">${multiSel?'Select multiple: on':'Select multiple'}</button>${n>=2?`<button data-x="group">Group (${n})</button>`:''}`;
   b.querySelectorAll('button').forEach(x=>x.onclick=e=>{const a=x.dataset.x;
    if(a==='add'){if(exTab==='Scripts'){newScript();return;}const ins=insertSpec({spec:[P_('Part','Block',[0,0.5,0],[4,1,2],'Medium stone grey','Plastic')]});const o=ins&&ins[0];if(o){if(exTab==='Storage')o.parent='Storage';sel=[o.id];commit();refreshAll();}return;}
-   if(a==='dup'){duplicateSel();return;}if(a==='del'){deleteSel();return;}
+   if(a==='multi'){multiSel=!multiSel;const bm=$('b_multi');if(bm)bm.classList.toggle('on',multiSel);if(!multiSel&&sel.length>1)sel=sel.slice(-1);refreshAll();bar();return;}if(a==='group'){groupSel();multiSel=false;refreshAll();bar();return;}if(a==='dup'){duplicateSel();return;}if(a==='del'){deleteSel();return;}
    if(a==='ren'){const o=byId(numSel()[0]);if(o)bxPrompt('New name',o.name).then(v=>{if(v&&v.trim()){o.name=v.trim();commit();refreshAll();}});return;}
    if(a==='more'){const r=x.getBoundingClientRect();ctxMenu(r.left,r.bottom+2);}});}
  const _rx=refreshExplorer;refreshExplorer=function(){_rx.apply(this,arguments);try{bar();}catch(e){console.error(e);}};
@@ -5817,6 +5827,190 @@ const _da=doAct;doAct=function(c,op){if(op&&(op.name==='visible'||op.name==='inv
      else{const g=G.guiData.find(g=>nrmName(g.name)===nrmName(who));if(g)vis=!!g._open;}}
     if(vis!==null){const yes=want?vis:!vis;return neg?!yes:yes;}}}
   return _cd.apply(this,arguments);};}
+})();
+
+/* ================= 27. Mesh maker: start from lots of shapes (with settings), whole-mesh tools, draw your own outline/profile, mirror editing ================= */
+(function(){
+const API=window.bxMeshAPI;if(!API)return;
+const r3=x=>Math.round(x*1000)/1000;
+/* ---------- building blocks ---------- */
+function builder(){const v=[],t=[],key={};
+ const P=p=>{const k=p.map(a=>Math.round(a*10000)).join(',');if(key[k]==null){key[k]=v.length;v.push(p.map(r3));}return key[k];};
+ const T=(a,b,c,want)=>{if(a===b||b===c||a===c)return;if(want){const A=v[a],B=v[b],C=v[c];const n=cross(sub(B,A),sub(C,A));if(dot(n,want)<0){t.push([a,c,b]);return;}}t.push([a,b,c]);};
+ return {v,t,P,T,done:()=>({v,t,o:1})};}
+/* spin a profile around the up axis. pts = [[r,y],...] going counter-clockwise in (r,y) (bottom -> out -> up -> in). closed: the last point joins the first */
+function lathe(pts,sides,closed,a0){const B=builder();sides=Math.max(3,Math.round(sides));a0=a0||0;
+ const ring=pts.map(([r,y])=>{const row=[];for(let j=0;j<sides;j++){const a=a0+j/sides*Math.PI*2;row.push(B.P([r*Math.cos(a),y,r*Math.sin(a)]));}return row;});
+ const segs=closed?pts.length:pts.length-1;
+ for(let i=0;i<segs;i++){const i2=(i+1)%pts.length;const dr=pts[i2][0]-pts[i][0],dy=pts[i2][1]-pts[i][1];
+  for(let j=0;j<sides;j++){const j2=(j+1)%sides;const am=a0+(j+0.5)/sides*Math.PI*2;const want=[dy*Math.cos(am),-dr,dy*Math.sin(am)];
+   const a=ring[i][j],b=ring[i][j2],c=ring[i2][j2],d=ring[i2][j];B.T(a,b,c,want);B.T(a,c,d,want);}}
+ return B.done();}
+/* push a flat outline (counter-clockwise, x/y) out along z */
+function area(pl){let s=0;for(let i=0;i<pl.length;i++){const a=pl[i],b=pl[(i+1)%pl.length];s+=a[0]*b[1]-b[0]*a[1];}return s/2;}
+function earcut(pl){const idx=pl.map((_,i)=>i);const out=[];let guard=0;
+ const inside=(p,a,b,c)=>{const s=(u,v,w)=>(v[0]-u[0])*(w[1]-u[1])-(v[1]-u[1])*(w[0]-u[0]);const d1=s(p,a,b),d2=s(p,b,c),d3=s(p,c,a);return d1>=0&&d2>=0&&d3>=0;};
+ while(idx.length>3&&guard++<5000){let cut=false;for(let k=0;k<idx.length;k++){const i0=idx[(k+idx.length-1)%idx.length],i1=idx[k],i2=idx[(k+1)%idx.length];const a=pl[i0],b=pl[i1],c=pl[i2];
+   if((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])<=1e-9)continue;let ok=true;for(const j of idx){if(j===i0||j===i1||j===i2)continue;if(inside(pl[j],a,b,c)){ok=false;break;}}
+   if(ok){out.push([i0,i1,i2]);idx.splice(k,1);cut=true;break;}}if(!cut)break;}
+ if(idx.length===3)out.push([idx[0],idx[1],idx[2]]);return out;}
+function extrude(pl,depth,taper){pl=pl.slice();if(area(pl)<0)pl.reverse();const B=builder();const h=(depth||1)/2,tp=taper==null?1:taper;
+ const F=pl.map(p=>B.P([p[0]*tp,p[1]*tp,h])),K=pl.map(p=>B.P([p[0],p[1],-h]));
+ earcut(pl).forEach(([a,b,c])=>{B.T(F[a],F[b],F[c],[0,0,1]);B.T(K[a],K[c],K[b],[0,0,-1]);});
+ for(let i=0;i<pl.length;i++){const j=(i+1)%pl.length;const dx=pl[j][0]-pl[i][0],dy=pl[j][1]-pl[i][1];const w=[dy,-dx,0];B.T(K[i],K[j],F[j],w);B.T(K[i],F[j],F[i],w);}
+ return B.done();}
+/* a round tube that follows a path */
+function sweep(path,rad,sides,closed){const B=builder();const n=path.length;const T=path.map((p,i)=>{const a=path[closed?(i-1+n)%n:Math.max(0,i-1)],b=path[closed?(i+1)%n:Math.min(n-1,i+1)];return norm(sub(b,a));});
+ let N0=Math.abs(T[0][1])<0.9?norm(cross(T[0],[0,1,0])):norm(cross(T[0],[1,0,0]));const frames=[];let N=N0;
+ for(let i=0;i<n;i++){if(i>0){N=sub(N,mul(T[i],dot(N,T[i])));N=norm(N);}frames.push([N,cross(T[i],N)]);}
+ const rings=path.map((p,i)=>{const [N,Bn]=frames[i];const row=[];for(let j=0;j<sides;j++){const a=j/sides*Math.PI*2;row.push(B.P(add(p,add(mul(N,Math.cos(a)*rad),mul(Bn,Math.sin(a)*rad)))));}return row;});
+ const segs=closed?n:n-1;for(let i=0;i<segs;i++){const i2=(i+1)%n;for(let j=0;j<sides;j++){const j2=(j+1)%sides;const c=mul(add(path[i],path[i2]),0.5);
+   const q=[rings[i][j],rings[i][j2],rings[i2][j2],rings[i2][j]];const m=mul(add(B.v[q[0]],B.v[q[2]]),0.5);const want=sub(m,c);B.T(q[0],q[1],q[2],want);B.T(q[0],q[2],q[3],want);}}
+ if(!closed){[[0,-1],[n-1,1]].forEach(([i,s])=>{const c=B.P(path[i]);for(let j=0;j<sides;j++){const j2=(j+1)%sides;B.T(c,rings[i][j],rings[i][j2],mul(T[i],s));}});}
+ return B.done();}
+/* squeeze any mesh into the -0.5..0.5 box */
+function fit(M,keepRatio){const mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9];M.v.forEach(p=>p.forEach((x,i)=>{mn[i]=Math.min(mn[i],x);mx[i]=Math.max(mx[i],x);}));
+ const sz=mx.map((x,i)=>Math.max(1e-6,x-mn[i]));const s=keepRatio?Math.max(...sz):null;M.v=M.v.map(p=>p.map((x,i)=>r3((x-(mn[i]+mx[i])/2)/(s||sz[i]))));return M;}
+const circ=(n,r,a0)=>{const o=[];for(let i=0;i<n;i++){const a=(a0||0)+i/n*Math.PI*2;o.push([Math.cos(a)*r,Math.sin(a)*r]);}return o;};
+const arcPts=(n,r,a,b,cx,cy)=>{const o=[];for(let i=0;i<=n;i++){const t=a+(b-a)*i/n;o.push([(cx||0)+Math.cos(t)*r,(cy||0)+Math.sin(t)*r]);}return o;};
+/* ---------- the shapes ---------- */
+const SHAPES={
+ Cube:{p:{Points:[2,1,6,1]},make:q=>{const M=API.cubeMesh(q.Points);return M;}},
+ Sphere:{p:{Detail:[16,6,40,1]},make:q=>{const n=q.Detail;const pr=[];for(let i=0;i<=Math.round(n/2);i++){const a=-Math.PI/2+i/Math.round(n/2)*Math.PI;pr.push([Math.cos(a)*0.5,Math.sin(a)*0.5]);}return lathe(pr,n);}},
+ Dome:{p:{Detail:[16,6,40,1],Height:[100,20,100,5]},make:q=>{const n=q.Detail,m=Math.max(2,Math.round(n/4));const pr=[[0,0]];for(let i=0;i<=m;i++){const a=i/m*Math.PI/2;pr.push([Math.cos(a)*0.5,Math.sin(a)*0.5*q.Height/100]);}return fit(lathe(pr,n));}},
+ Cylinder:{p:{Sides:[20,3,48,1],Rows:[1,1,10,1]},make:q=>{const pr=[[0,-0.5]];for(let i=0;i<=q.Rows;i++)pr.push([0.5,-0.5+i/q.Rows]);pr.push([0,0.5]);return lathe(pr,q.Sides);}},
+ Cone:{p:{Sides:[20,3,48,1],'Top size':[0,0,90,5]},make:q=>{const t=q['Top size']/100*0.5;return lathe(t>0?[[0,-0.5],[0.5,-0.5],[t,0.5],[0,0.5]]:[[0,-0.5],[0.5,-0.5],[0,0.5]],q.Sides);}},
+ Pyramid:{p:{Sides:[4,3,10,1]},make:q=>fit(lathe([[0,-0.5],[0.5,-0.5],[0,0.5]],q.Sides,false,Math.PI/q.Sides))},
+ Prism:{p:{Sides:[6,3,12,1]},make:q=>fit(lathe([[0,-0.5],[0.5,-0.5],[0.5,0.5],[0,0.5]],q.Sides,false,Math.PI/q.Sides))},
+ Capsule:{p:{Detail:[16,6,32,1],Middle:[40,0,80,5]},make:q=>{const n=q.Detail,m=Math.max(2,Math.round(n/4)),h=q.Middle/100/2;const pr=[];for(let i=0;i<=m;i++){const a=-Math.PI/2+i/m*Math.PI/2;pr.push([Math.cos(a)*0.5,Math.sin(a)*0.5-h]);}for(let i=0;i<=m;i++){const a=i/m*Math.PI/2;pr.push([Math.cos(a)*0.5,Math.sin(a)*0.5+h]);}return fit(lathe(pr,n));}},
+ Gem:{p:{Sides:[8,4,16,1],Top:[30,5,60,5]},make:q=>{const t=q.Top/100;return fit(lathe([[0,-0.5],[0.5,0.5-t-0.12],[0.36,0.5],[0,0.5]],q.Sides));}},
+ Donut:{p:{'Around':[28,6,64,1],'Tube sides':[16,4,40,1],Thickness:[35,8,48,1]},make:q=>{const r=q.Thickness/100*0.5,R=0.5-r;return fit(lathe(circ(q['Tube sides'],r).map(([a,b])=>[R+a,b]),q.Around,true),true);}},
+ Tube:{p:{Sides:[24,3,64,1],Hole:[60,5,95,5],Rows:[1,1,10,1]},make:q=>{const hi=q.Hole/100*0.5;const pr=[];for(let i=0;i<=q.Rows;i++)pr.push([0.5,-0.5+i/q.Rows]);for(let i=q.Rows;i>=0;i--)pr.push([hi,-0.5+i/q.Rows]);pr.unshift();return lathe([[hi,-0.5],...pr.slice(0,q.Rows+1),...pr.slice(q.Rows+1)].filter((p,i,a)=>i===0||p[0]!==a[i-1][0]||p[1]!==a[i-1][1]),q.Sides,true);}},
+ Bowl:{p:{Detail:[24,6,48,1],Wall:[12,4,30,1]},make:q=>{const n=q.Detail,m=Math.max(3,Math.round(n/4)),w=q.Wall/100;const o=[],i2=[];for(let i=0;i<=m;i++){const a=-Math.PI/2+i/m*Math.PI/2;o.push([Math.cos(a)*0.5,Math.sin(a)*0.5]);}for(let i=m;i>=0;i--){const a=-Math.PI/2+i/m*Math.PI/2;i2.push([Math.cos(a)*(0.5-w),Math.sin(a)*(0.5-w)]);}
+   return fit(lathe([...o,...i2],n,false));}},
+ Spring:{p:{Turns:[4,1,12,1],Thickness:[10,3,25,1],Sides:[10,4,24,1]},make:q=>{const path=[];const steps=q.Turns*24;for(let i=0;i<=steps;i++){const a=i/24*Math.PI*2;path.push([Math.cos(a)*0.5,-0.5+i/steps,Math.sin(a)*0.5]);}return fit(sweep(path,q.Thickness/100*0.5,q.Sides,false));}},
+ Knot:{p:{Loops:[3,2,7,1],Twists:[2,1,5,1],Thickness:[12,4,25,1]},make:q=>{let P=q.Loops,Q=q.Twists;if(P===Q)Q=P+1;const path=[];const n=160;for(let i=0;i<n;i++){const t=i/n*Math.PI*2;const r=0.32+0.16*Math.cos(Q*t);path.push([r*Math.cos(P*t),0.16*Math.sin(Q*t),r*Math.sin(P*t)]);}return fit(sweep(path,q.Thickness/100*0.4,10,true),true);}},
+ Star:{p:{Points:[5,3,12,1],Inner:[45,10,90,5]},make:q=>{const pl=[];for(let i=0;i<q.Points*2;i++){const a=Math.PI/2+i/(q.Points*2)*Math.PI*2;const r=i%2?0.5*q.Inner/100:0.5;pl.push([Math.cos(a)*r,Math.sin(a)*r]);}return fit(extrude(pl,1));}},
+ Heart:{p:{Detail:[24,8,48,1]},make:q=>{const pl=[];const n=q.Detail*2;for(let i=0;i<n;i++){const t=i/n*Math.PI*2;pl.push([16*Math.pow(Math.sin(t),3)/34,(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t))/34]);}return fit(extrude(pl,1));}},
+ Arch:{p:{Thickness:[25,8,45,1],Detail:[16,4,32,1]},make:q=>{const w=q.Thickness/100;const o=arcPts(q.Detail,0.5,0,Math.PI),i2=arcPts(q.Detail,0.5-w,Math.PI,0);return fit(extrude([[0.5,-0.5],...o,[-0.5,-0.5],[-0.5+w,-0.5],...i2,[0.5-w,-0.5]].filter((p,i,a)=>i===0||Math.hypot(p[0]-a[i-1][0],p[1]-a[i-1][1])>1e-6),1));}},
+ Stairs:{p:{Steps:[5,2,16,1]},make:q=>{const n=q.Steps,pl=[[0.5,-0.5],[0.5,0.5]];for(let i=n;i>=1;i--){const x=0.5-(n-i+1)/n,y=-0.5+i/n;pl.push([x,y]);pl.push([x,y-1/n]);}pl.pop();pl.push([-0.5,-0.5]);
+   const c=[];pl.forEach(p=>{if(!c.length||Math.hypot(p[0]-c[c.length-1][0],p[1]-c[c.length-1][1])>1e-6)c.push(p);});return fit(extrude(c.map(([x,y])=>[x,y]),1));}},
+ Cross:{p:{Arms:[34,10,70,2]},make:q=>{const a=q.Arms/100/2;return extrude([[a,-0.5],[a,-a],[0.5,-a],[0.5,a],[a,a],[a,0.5],[-a,0.5],[-a,a],[-0.5,a],[-0.5,-a],[-a,-a],[-a,-0.5]],1);}},
+ Wedge:{p:{},make:q=>extrude([[-0.5,-0.5],[0.5,-0.5],[-0.5,0.5]],1)},
+ Outline:{p:{'Front size':[100,0,200,5]},pad:'outline',make:q=>{const pl=(q.pts&&q.pts.length>=3?q.pts:[[-0.4,-0.4],[0.4,-0.4],[0.45,0.1],[0,0.45],[-0.45,0.1]]);return fit(extrude(pl,1,Math.max(0.001,q['Front size']/100)));}},
+ Spin:{p:{Sides:[24,3,64,1]},pad:'profile',make:q=>{let pr=(q.pts&&q.pts.length>=2?q.pts:[[0.15,-0.5],[0.42,-0.3],[0.2,0.1],[0.3,0.5]]).map(([x,y])=>[Math.max(0,x),y]);pr=pr.slice().sort((a,b)=>a[1]-b[1]);
+   if(pr[0][0]>0.001)pr.unshift([0,pr[0][1]]);if(pr[pr.length-1][0]>0.001)pr.push([0,pr[pr.length-1][1]]);return fit(lathe(pr,q.Sides));}}
+};
+/* the "Tube" builder above is fiddly: make it plainly */
+SHAPES.Tube.make=q=>{const hi=q.Hole/100*0.5,n=q.Rows;const pr=[];for(let i=0;i<=n;i++)pr.push([0.5,-0.5+i/n]);for(let i=n;i>=0;i--)pr.push([hi,-0.5+i/n]);return lathe(pr,q.Sides,true);};
+const ICON={Cube:'<path d="M4 8l8-4 8 4v9l-8 4-8-4z M4 8l8 4 8-4 M12 12v9"/>',Sphere:'<circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="8" ry="3"/>',Dome:'<path d="M3 17a9 9 0 0 1 18 0z"/><ellipse cx="12" cy="17" rx="9" ry="2"/>',
+ Cylinder:'<ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12a7 2.5 0 0 0 14 0V6"/>',Cone:'<path d="M12 3L5 18a7 2.5 0 0 0 14 0z"/>',Pyramid:'<path d="M12 3L3 17l9 4 9-4z M12 3v18"/>',Prism:'<path d="M7 4h10l4 4v9l-4 4H7l-4-4V8z"/>',
+ Capsule:'<rect x="7" y="2" width="10" height="20" rx="5"/>',Gem:'<path d="M6 4h12l4 5-10 12L2 9z M2 9h20 M9 4l3 5 3-5"/>',Donut:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/>',Tube:'<ellipse cx="12" cy="6" rx="7" ry="2.5"/><ellipse cx="12" cy="6" rx="3.5" ry="1.2"/><path d="M5 6v12a7 2.5 0 0 0 14 0V6"/>',
+ Bowl:'<path d="M3 9h18a9 9 0 0 1-18 0z"/>',Spring:'<path d="M6 4c12 0 12 3 0 3s-12 3 0 3 12 3 0 3-12 3 0 3 12 3 0 3"/>',Knot:'<path d="M12 4c5 0 7 6 3 9s-9 2-9-2 5-6 9-2 1 9-3 9-7-4-3-8"/>',Star:'<path d="M12 2l3 7 7 .5-5.5 4.5 2 7-6.5-4-6.5 4 2-7L2 9.5 9 9z"/>',
+ Heart:'<path d="M12 20S3 14 3 8.5A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 9 2.5C21 14 12 20 12 20z"/>',Arch:'<path d="M3 20V11a9 9 0 0 1 18 0v9h-5v-9a4 4 0 0 0-8 0v9z"/>',Stairs:'<path d="M3 20h18V4h-5v4h-4v4H8v4H3z"/>',Cross:'<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>',
+ Wedge:'<path d="M3 20h18L3 6z"/>',Outline:'<path d="M4 19l2-11 7-4 7 6-3 9z"/><circle cx="4" cy="19" r="1.5"/><circle cx="6" cy="8" r="1.5"/><circle cx="13" cy="4" r="1.5"/>',Spin:'<path d="M12 2v20"/><path d="M12 4c4 0 6 3 4 7s1 6 2 9h-6"/><path d="M6 13a6 2 0 0 0 12 0" stroke-dasharray="2 2"/>'};
+const NAMES={Outline:'Your outline',Spin:'Your spin shape'};
+/* ---------- whole-mesh tools ---------- */
+function normals(M){const N=M.v.map(()=>[0,0,0]);const mn=[0,1,2].map(i=>Math.min(...M.v.map(p=>p[i]))),mx=[0,1,2].map(i=>Math.max(...M.v.map(p=>p[i])));const mid=mn.map((x,i)=>(x+mx[i])/2);
+ M.t.forEach(([a,b,c])=>{const A=M.v[a],B=M.v[b],C=M.v[c];let n=cross(sub(B,A),sub(C,A));if(!M.o){const ctr=mul(add(add(A,B),C),1/3);if(dot(n,sub(ctr,mid))<0)n=mul(n,-1);}[a,b,c].forEach(i=>{N[i]=add(N[i],n);});});return N.map(n=>len(n)>1e-9?norm(n):[0,1,0]);}
+function nbrs(M){const S=M.v.map(()=>new Set());M.t.forEach(t=>t.forEach(a=>t.forEach(b=>{if(a!==b)S[a].add(b);})));return S;}
+const TOOLS={
+ Twist:{amt:[90,-360,360,5,'°'],fn:(M,a)=>{M.v=M.v.map(([x,y,z])=>{const t=a*Math.PI/180*(y+0.5);return [x*Math.cos(t)-z*Math.sin(t),y,x*Math.sin(t)+z*Math.cos(t)];});}},
+ Taper:{amt:[50,0,200,5,'% at top'],fn:(M,a)=>{M.v=M.v.map(([x,y,z])=>{const s=1+(a/100-1)*(y+0.5);return [x*s,y,z*s];});}},
+ Bend:{amt:[90,-270,270,5,'°'],fn:(M,a)=>{const k=a*Math.PI/180;if(Math.abs(k)<1e-3)return;const R=1/k;M.v=M.v.map(([x,y,z])=>{const t=(y+0.5)*k;return [R-(R-x)*Math.cos(t),(R-x)*Math.sin(t),z];});}},
+ 'Puff out':{amt:[15,-50,50,1,'%'],fn:(M,a)=>{const N=normals(M);M.v=M.v.map((p,i)=>add(p,mul(N[i],a/100*0.5)));}},
+ Smooth:{amt:[2,1,10,1,' times'],fn:(M,a)=>{const S=nbrs(M);for(let k=0;k<a;k++){M.v=M.v.map((p,i)=>{if(!S[i].size)return p;let s=[0,0,0];S[i].forEach(j=>{s=add(s,M.v[j]);});s=mul(s,1/S[i].size);return add(mul(p,0.5),mul(s,0.5));});}}},
+ Roughen:{amt:[20,1,100,1,'%'],fn:(M,a)=>{const N=normals(M);M.v=M.v.map((p,i)=>add(p,mul(N[i],(Math.random()-0.5)*a/100*0.25)));}},
+ Wave:{amt:[3,1,10,1,' waves'],fn:(M,a)=>{M.v=M.v.map(([x,y,z])=>[x+Math.sin((y+0.5)*a*Math.PI*2)*0.08,y,z]);}}
+};
+const ONE={
+ 'Mirror left-right':M=>{M.v=M.v.map(([x,y,z])=>[-x,y,z]);M.t=M.t.map(([a,b,c])=>[a,c,b]);},
+ 'Mirror up-down':M=>{M.v=M.v.map(([x,y,z])=>[x,-y,z]);M.t=M.t.map(([a,b,c])=>[a,c,b]);},
+ 'Mirror front-back':M=>{M.v=M.v.map(([x,y,z])=>[x,y,-z]);M.t=M.t.map(([a,b,c])=>[a,c,b]);},
+ 'Make left = right':M=>{/* copy the right half (x>0) onto the left */const keep=M.v.map(p=>p[0]>=-1e-6);const map={};M.v.forEach((p,i)=>{if(keep[i])return;let bj=-1,bd=1e9;M.v.forEach((q,j)=>{if(!keep[j])return;const d=Math.hypot(q[0]+p[0],q[1]-p[1],q[2]-p[2]);if(d<bd){bd=d;bj=j;}});if(bj>=0)M.v[i]=[-M.v[bj][0],M.v[bj][1],M.v[bj][2]];});},
+ 'Turn 90° sideways':M=>{M.v=M.v.map(([x,y,z])=>[-z,y,x]);},
+ 'Lay it down':M=>{M.v=M.v.map(([x,y,z])=>[x,-z,y]);},
+ 'Inside out':M=>{M.t=M.t.map(([a,b,c])=>[a,c,b]);M.o=1;},
+ 'More points':M=>{const S=API.subdivide(M);M.v=S.v;M.t=S.t;},
+ 'Fill the box':M=>{fit(M);}
+};
+/* ---------- panel ---------- */
+const css=document.createElement('style');css.textContent=`
+#mshp{position:absolute;right:0;top:0;bottom:0;width:300px;max-width:46%;background:var(--pn);border-left:1px solid var(--ln);overflow-y:auto;z-index:21;padding:8px 10px 60px;color:var(--tx);font-size:13px;pointer-events:auto}
+#mshp h4{margin:12px 0 6px;font-size:13px;font-weight:800}#mshp h4:first-child{margin-top:4px}
+#mshp .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+#mshp .grid button{display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--pn2);border:1px solid var(--ln);color:var(--tx);padding:6px 2px;font:inherit;font-size:11px;cursor:pointer}
+#mshp .grid button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+#mshp .grid button.on{background:#3a4bd8;border-color:#5b6cff;color:#fff}
+#mshp .row{display:flex;align-items:center;gap:6px;margin:5px 0}#mshp .row label{flex:0 0 86px;color:var(--mu)}#mshp .row input[type=range]{flex:1;min-width:0}#mshp .row .val{flex:0 0 52px;text-align:right;font-variant-numeric:tabular-nums}
+#mshp button.b{background:var(--pn2);border:1px solid var(--ln);color:var(--tx);padding:6px 8px;font:inherit;font-size:12px;cursor:pointer}#mshp button.b.on{background:#3a4bd8;border-color:#5b6cff;color:#fff}
+#mshp .btns{display:flex;flex-wrap:wrap;gap:4px}#mshp .hint{color:var(--mu);font-size:11.5px;margin:4px 0}
+body.mshp-open #mshe .mhint{right:310px}
+#mshpad{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:flex;align-items:center;justify-content:center}
+#mshpad .box{background:var(--pn);border:1px solid var(--ln);padding:12px;width:min(560px,96vw);max-height:96vh;overflow:auto;color:var(--tx)}
+#mshpad svg{width:100%;max-height:62vh;aspect-ratio:1;background:#16171b;touch-action:none;display:block}
+#mshpad .btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}#mshpad button{background:var(--pn2);border:1px solid var(--ln);color:var(--tx);padding:7px 10px;font:inherit;cursor:pointer}#mshpad button.ok{background:#2f9e44;border-color:#2f9e44;color:#fff}#mshpad button.on{background:#3a4bd8;color:#fff}
+@media (max-height:500px){#mshp{width:250px}}`;document.head.appendChild(css);
+const obj=()=>{const E=window.bxME&&bxME();return E&&byId(E.id);};
+function gen(o,shape,q,keepRef){const S=SHAPES[shape];if(!S)return;let M;try{M=S.make(q);}catch(e){console.warn(e);toastEd('Could not make that shape');return;}if(!M||!M.v||M.v.length<4)return;
+ o.props.Mesh={v:M.v.map(p=>p.map(r3)),t:M.t,o:M.o?1:undefined};if(!o.props.Mesh.o)delete o.props.Mesh.o;o.props.MeshGen={shape,q};if(!keepRef)o.props.MeshRef=o.props.Size.slice();}
+function defaults(shape){const q={};Object.entries(SHAPES[shape].p).forEach(([k,v])=>q[k]=v[0]);return q;}
+function panel(){const o=obj();let P=$('mshp');if(!o){if(P)P.remove();document.body.classList.remove('mshp-open');return;}
+ if(!P){P=document.createElement('div');P.id='mshp';$('mshe').appendChild(P);document.body.classList.add('mshp-open');}
+ const G=o.props.MeshGen||null;const cur=G&&G.shape;const mode=o.props.MeshStretch||'Stretch';
+ let h=`<h4>Start from a shape</h4><div class="grid">${Object.keys(SHAPES).map(k=>`<button data-shape="${k}" class="${k===cur?'on':''}"><svg viewBox="0 0 24 24">${ICON[k]||''}</svg>${NAMES[k]||k}</button>`).join('')}</div>`;
+ if(cur&&SHAPES[cur]){const S=SHAPES[cur];h+=`<h4>${NAMES[cur]||cur} settings</h4>`;
+  if(S.pad)h+=`<div class="btns"><button class="b" data-pad="${S.pad}">${S.pad==='outline'?'Draw the outline':'Draw the side shape'}</button></div><div class="hint">${S.pad==='outline'?'Your outline is pushed out into a solid.':'Your side shape is spun around the middle line, like a vase on a pottery wheel.'}</div>`;
+  Object.entries(S.p).forEach(([k,[d,mn,mx,st]])=>{const v=G.q[k]??d;h+=`<div class="row"><label>${k}</label><input type="range" min="${mn}" max="${mx}" step="${st}" value="${v}" data-gp="${k}"><span class="val">${v}</span></div>`;});
+  if(!Object.keys(S.p).length&&!S.pad)h+=`<div class="hint">No settings. Use the tools below or move points.</div>`;}
+ h+=`<h4>Change the whole mesh</h4>`;
+ Object.entries(TOOLS).forEach(([k,T])=>{const [d,mn,mx,st,u]=T.amt;h+=`<div class="row"><label>${k}</label><input type="range" min="${mn}" max="${mx}" step="${st}" value="${d}" data-ta="${k}"><span class="val">${d}${u}</span><button class="b" data-tool="${k}">Do it</button></div>`;});
+ h+=`<div class="btns">${Object.keys(ONE).map(k=>`<button class="b" data-one="${k}">${k}</button>`).join('')}</div>`;
+ h+=`<h4>When the part is stretched</h4><div class="btns">${[['Stretch','Stretch everything'],['Keep shape','Keep its shape'],['Keep edges','Keep the edges']].map(([k,l])=>`<button class="b${mode===k?' on':''}" data-st="${k}">${l}</button>`).join('')}</div>
+ <div class="hint">${mode==='Stretch'?'The whole mesh stretches with the part.':mode==='Keep shape'?'The mesh keeps the look it had when you picked this. It grows evenly and stays in the middle.':'The outer edges keep their size and only the middle stretches, so corners and rims don\'t get squashed.'}</div>
+ ${mode!=='Stretch'?'<div class="btns"><button class="b" data-ref="1">Use the current size as the normal look</button></div>':''}
+ <h4>Points</h4><div class="hint">${o.props.Mesh?o.props.Mesh.v.length:0} points. Use Move / Add / Delete at the top. Mirror edits moves the matching point on the other side too.</div>`;
+ P.innerHTML=h;
+ P.querySelectorAll('[data-shape]').forEach(b=>b.onclick=()=>{const k=b.dataset.shape;const q=(o.props.MeshGen&&o.props.MeshGen.shape===k)?o.props.MeshGen.q:defaults(k);gen(o,k,q);commit();panel();if(SHAPES[k].pad&&!(q.pts&&q.pts.length))pad(o,SHAPES[k].pad);});
+ P.querySelectorAll('[data-gp]').forEach(i=>{const k=i.dataset.gp;i.oninput=()=>{i.nextElementSibling.textContent=i.value;const G2=o.props.MeshGen;G2.q[k]=+i.value;gen(o,G2.shape,G2.q,true);};i.onchange=()=>{commit();panel();};});
+ P.querySelectorAll('[data-ta]').forEach(i=>{i.oninput=()=>{i.nextElementSibling.textContent=i.value+TOOLS[i.dataset.ta].amt[4];};});
+ P.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{const k=b.dataset.tool;const a=+P.querySelector(`[data-ta="${k}"]`).value;const M=JSON.parse(JSON.stringify(o.props.Mesh||API.DEF));TOOLS[k].fn(M,a);if(k==='Bend')fit(M);M.v=M.v.map(p=>p.map(r3));o.props.Mesh=M;delete o.props.MeshGen;commit();panel();});
+ P.querySelectorAll('[data-one]').forEach(b=>b.onclick=()=>{const k=b.dataset.one;const M=JSON.parse(JSON.stringify(o.props.Mesh||API.DEF));if(k==='More points'&&M.t.length>1500){toastEd('That mesh already has lots of points');return;}ONE[k](M);M.v=M.v.map(p=>p.map(r3));o.props.Mesh=M;if(k!=='Inside out')delete o.props.MeshGen;commit();panel();});
+ P.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{const k=b.dataset.st;if(k!=='Stretch'&&(o.props.MeshStretch||'Stretch')==='Stretch')o.props.MeshRef=o.props.Size.slice();o.props.MeshStretch=k;commit();panel();refreshProps();});
+ P.querySelectorAll('[data-ref]').forEach(b=>b.onclick=()=>{o.props.MeshRef=o.props.Size.slice();commit();toastEd('Saved this size as the normal look');});
+ P.querySelectorAll('[data-pad]').forEach(b=>b.onclick=()=>pad(o,b.dataset.pad));}
+/* ---------- draw your own outline / side shape ---------- */
+function pad(o,kind){const G=o.props.MeshGen&&o.props.MeshGen.shape===(kind==='outline'?'Outline':'Spin')?o.props.MeshGen:{shape:kind==='outline'?'Outline':'Spin',q:defaults(kind==='outline'?'Outline':'Spin')};
+ let pts=(G.q.pts&&G.q.pts.length?G.q.pts:(kind==='outline'?[[-0.4,-0.4],[0.4,-0.4],[0.45,0.1],[0,0.45],[-0.45,0.1]]:[[0.15,-0.5],[0.42,-0.3],[0.2,0.1],[0.3,0.5]])).map(p=>p.slice());let selI=null,mode='move';
+ const d=document.createElement('div');d.id='mshpad';d.innerHTML=`<div class="box"><b>${kind==='outline'?'Draw the outline':'Draw the side shape'}</b><div class="hint" style="color:var(--mu);font-size:12px;margin:4px 0 8px">${kind==='outline'?'Tap Add, then tap to add corners. Drag corners to move them. The shape is pushed out into a solid.':'The dashed line is the middle. Draw one side (right of the line) from bottom to top. It gets spun around the middle.'}</div>
+ <svg viewBox="-0.6 -0.6 1.2 1.2"></svg><div class="btns"><button data-k="move" class="on">Move corners</button><button data-k="add">Add corners</button><button data-k="del">Delete corners</button><button id="pd_sm">Round the corners</button><button id="pd_clr">Start over</button><button id="pd_ok" class="ok">Use it</button><button id="pd_x">Cancel</button></div></div>`;
+ document.body.appendChild(d);const sv=d.querySelector('svg');
+ const draw=()=>{let g='';for(let i=-5;i<=5;i++){g+=`<line x1="${i/10}" y1="-0.5" x2="${i/10}" y2="0.5" stroke="#2a2c33" stroke-width="0.004"/><line x1="-0.5" y1="${i/10}" x2="0.5" y2="${i/10}" stroke="#2a2c33" stroke-width="0.004"/>`;}
+  if(kind!=='outline')g+=`<line x1="0" y1="-0.58" x2="0" y2="0.58" stroke="#ff8a1f" stroke-width="0.006" stroke-dasharray="0.02 0.015"/>`;
+  const sp=pts.map(([x,y])=>`${x},${-y}`).join(' ');g+=kind==='outline'?`<polygon points="${sp}" fill="rgba(91,108,255,.35)" stroke="#8fa0ff" stroke-width="0.008"/>`:`<polyline points="${sp}" fill="none" stroke="#8fa0ff" stroke-width="0.01"/>`+(pts.length?`<polyline points="${pts.map(([x,y])=>`${-x},${-y}`).join(' ')}" fill="none" stroke="#8fa0ff" stroke-opacity=".35" stroke-width="0.008"/>`:'');
+  g+=pts.map(([x,y],i)=>`<circle cx="${x}" cy="${-y}" r="0.022" fill="${i===selI?'#ff8a1f':'#fff'}" stroke="${mode==='del'?'#e5484d':'#3d5afe'}" stroke-width="0.008" data-i="${i}"/>`).join('');sv.innerHTML=g;};
+ const at=e=>{const r=sv.getBoundingClientRect();const x=((e.clientX-r.left)/r.width)*1.2-0.6,y=-(((e.clientY-r.top)/r.height)*1.2-0.6);const sn=v=>Math.round(Math.max(-0.5,Math.min(0.5,v))*100)/100;return [kind==='outline'?sn(x):Math.max(0,sn(x)),sn(y)];};
+ sv.onpointerdown=e=>{const c=e.target.closest('[data-i]');const p=at(e);
+  if(mode==='add'){/* put the new corner on the nearest edge */let bi=pts.length;if(pts.length>=2){let bd=1e9;const segs=kind==='outline'?pts.length:pts.length-1;for(let i=0;i<segs;i++){const a=pts[i],b=pts[(i+1)%pts.length];const dx=b[0]-a[0],dy=b[1]-a[1];const t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/(dx*dx+dy*dy||1)));const dd=Math.hypot(a[0]+dx*t-p[0],a[1]+dy*t-p[1]);if(dd<bd){bd=dd;bi=i+1;}}
+    if(kind!=='outline'){const de=Math.hypot(pts[pts.length-1][0]-p[0],pts[pts.length-1][1]-p[1]),ds=Math.hypot(pts[0][0]-p[0],pts[0][1]-p[1]);if(de<bd&&de<=ds)bi=pts.length;else if(ds<bd)bi=0;}}
+   pts.splice(bi,0,p);selI=bi;draw();return;}
+  if(!c){selI=null;draw();return;}const i=+c.dataset.i;
+  if(mode==='del'){if(pts.length<=(kind==='outline'?3:2)){toastEd('Keep at least '+(kind==='outline'?3:2)+' corners');return;}pts.splice(i,1);selI=null;draw();return;}
+  selI=i;sv.setPointerCapture(e.pointerId);sv.onpointermove=ev=>{pts[i]=at(ev);draw();};sv.onpointerup=()=>{sv.onpointermove=null;};draw();};
+ d.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{mode=(mode===b.dataset.k&&b.dataset.k!=='move')?'move':b.dataset.k;d.querySelectorAll('[data-k]').forEach(x=>x.classList.toggle('on',x.dataset.k===mode));draw();});
+ $('pd_sm').onclick=()=>{if(pts.length>60){toastEd('Already very round');return;}const o2=[];const n=pts.length,cl=kind==='outline';for(let i=0;i<n;i++){const a=pts[i],b=pts[(i+1)%n];if(!cl&&i===n-1){o2.push(a);break;}if(!cl&&i===0)o2.push(a);else o2.push([a[0]*0.75+b[0]*0.25,a[1]*0.75+b[1]*0.25].map(v=>Math.round(v*1000)/1000));o2.push([a[0]*0.25+b[0]*0.75,a[1]*0.25+b[1]*0.75].map(v=>Math.round(v*1000)/1000));}pts=o2;selI=null;draw();};
+ $('pd_clr').onclick=()=>{pts=kind==='outline'?[[-0.3,-0.3],[0.3,-0.3],[0,0.3]]:[[0.3,-0.5],[0.3,0.5]];selI=null;draw();};
+ $('pd_x').onclick=()=>d.remove();
+ $('pd_ok').onclick=()=>{const q=Object.assign({},G.q,{pts:pts.map(p=>p.slice())});gen(o,G.shape,q);commit();d.remove();panel();};draw();}
+/* ---------- hook into the point editor ---------- */
+const _open=window.bxMeshEditor;window.bxMeshEditor=function(o){const r=_open.apply(this,arguments);const d=$('mshe');if(d){const top=d.querySelector('.stop');
+  if(top&&!top.querySelector('#me_mir')){const b=document.createElement('button');b.className='xpill';b.id='me_mir';b.textContent='Mirror edits';b.onclick=()=>{const E=bxME();if(!E)return;E.mirror=!E.mirror;b.classList.toggle('on',!!E.mirror);};const ref=top.querySelector('#me_sub');top.insertBefore(b,ref);const hp=document.createElement('button');hp.className='xpill';hp.id='me_hide';hp.textContent='Hide points';hp.onclick=()=>{const E=bxME();if(!E)return;E.hidePts=!E.hidePts;hp.classList.toggle('on',!!E.hidePts);};top.insertBefore(hp,ref);}
+  ['me_sub'].forEach(id=>{const x=$(id);if(x)x.remove();});panel();}return r;};
+/* keep the Properties "Edit points" button pointing at the new editor */
+const _rp=refreshProps;refreshProps=function(){_rp.apply(this,arguments);const pp=$('props');if(!pp)return;pp.querySelectorAll('[data-mx="edit"]').forEach(b=>{b.textContent='Make / edit mesh';b.onclick=()=>{const o=typeof sel[0]==='number'?byId(sel[0]):null;if(o)window.bxMeshEditor(o);};});};
+/* undo/redo or other changes: rebuild the panel */
+const _rs=restore;restore=function(){const r=_rs.apply(this,arguments);setTimeout(()=>{if(window.bxME&&bxME())panel();},0);return r;};
+window.bxMeshShapes=SHAPES;window.bxMeshGen=gen;window.bxMeshTools=TOOLS;window.bxMeshOne=ONE;window.bxMeshPanel=panel;
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
