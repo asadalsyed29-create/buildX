@@ -5703,6 +5703,37 @@ body.mob #geui .stop>*,body.mob #geui .gadd>*{flex:none}body.mob #geui .gadd{dis
 body.mob #geui .stop .tb{padding:3px 7px!important;font-size:11px!important;min-height:0}body.mob #geui .stop .tb svg{width:16px;height:16px}
 body.mob #geui .getools button{padding:4px 8px;font-size:12px}body.mob #geui #ge_name{width:110px}#geui #ge_done{order:-1}`;document.head.appendChild(css);})();
 
+/* ---------- events can name the part they listen to: "#on_touch = Door" works from any code (GUI, scripts, other parts) ----------
+   and "#on_touch = Door = visible = self" (the event and its first command on one line) is the same as writing them on two lines */
+(function(){
+const EVN=['on_touch','ontouch','on_touch_end','on_click'];const evOf=n=>n==='ontouch'?'on_touch':n;
+const partNamed=a=>{const n=nrmName(a);return n&&S.items.some(o=>o.cls==='Part'&&nrmName(o.name)===n);};
+/* split "#on_touch = X = cmd…" into two lines, and fix #lineN numbers that come after */
+function split(src){const L=String(src==null?'':src).split('\n');const out=[];const shift=[];
+ L.forEach((l,i)=>{const m=l.match(/^(\s*)#\s*(on_touch_end|on_touch|ontouch|on_click)\s*=\s*([^=]+?)\s*=\s*(.+)$/i);
+  if(m&&!CMDS[m[3].trim().toLowerCase().replace(/\s+/g,'_')]){out.push(m[1]+'#'+m[2]+' = '+m[3].trim());out.push(m[1]+'#'+m[4].replace(/^#\s*/,''));shift.push(i+1);}else out.push(l);});
+ if(!shift.length)return src;const nl=n=>n+shift.filter(k=>k<n).length+(shift.includes(n)?0:0);
+ return out.map(l=>l.replace(/^(\s*#\s*line_?)(\d+)/i,(_,a,n)=>a+nl(+n))).join('\n');}
+window.bxSplitEvents=split;
+const _c=compile;compile=function(src){return _c.call(this,split(src));};
+const _k=checkCode;checkCode=function(src){const s2=split(src);const r=_k.call(this,s2);const res=r.res=r.res||[];const lines=String(s2||'').split('\n');const isGui=codeObj&&codeObj.type&&!codeObj.cls;
+ lines.forEach((l,i)=>{const m=l.match(/^\s*#\s*(on_touch_end|on_touch|ontouch|on_click)\s*(?:=\s*(.*))?$/i);if(!m)return;const a=(m[2]||'').trim();
+  if(a&&!partNamed(a)&&!(typeof isTargetWord==='function'&&isTargetWord(a.toLowerCase().replace(/\s+/g,'_'))))res.push({ln:i+1,lvl:'err',msg:`there is no part called "${a}". Use a part name from the Explorer`});
+  if(!a&&isGui&&!/click/i.test(m[1]))res.push({ln:i+1,lvl:'err',msg:`a GUI thing can't be touched. Say which part: #${m[1]} = PartName`});});
+ if(String(src).split('\n').length!==lines.length)res.forEach(x=>{x.msg=x.msg;});res.sort((a,b)=>a.ln-b.ln);return r;};
+/* when a part is touched or clicked, code anywhere that names it runs too */
+const _f=fire;fire=function(P,ev,arg,who){if(P&&P.kind==='part'&&P.handlers&&['on_touch','on_touch_end','on_click'].includes(ev)){const own=nrmName(P.o.name);const H=P.handlers;P.handlers=H.filter(h=>!(h.arg&&partNamed(h.arg)&&nrmName(h.arg)!==own));try{_f.apply(this,arguments);}finally{P.handlers=H;}}else _f.apply(this,arguments);if(!G||!P||P.kind!=='part'||!['on_touch','on_touch_end','on_click'].includes(ev))return;const n=nrmName(P.o.name);
+ G.scripts.forEach(Q=>{if(Q===P)return;(Q.handlers||[]).forEach(h=>{if(evOf(h.ev)!==ev||!h.arg||nrmName(h.arg)!==n)return;Q.threads.push(newThread(h.ops,who));});});};
+/* a part's own "#on_touch = ItsOwnName" still means itself; other names on a part's code should only run for that other part */
+const _f0=_f;
+/* #visible / #invisible on a GUI thing's own code (or = Gui.Thing) show and hide it */
+const gpath=P=>P&&P.guiEl&&P.o&&P.o.name;
+['visible','invisible'].forEach(k=>{const C=CMDS[k];if(!C)return;const f=C.fn;C.fn=(c,a)=>{const p=gpath(c.P);if(p&&window.guiSet){guiSet(p,{hidden:k==='invisible'});return;}return f(c,a);};});
+const _da=doAct;doAct=function(c,op){if(op&&(op.name==='visible'||op.name==='invisible')){const w=String(op.tgt||op.args||'').trim();
+  if(w&&w.toLowerCase()!=='self'&&/\./.test(w)&&window.guiSet){guiSet(w,{hidden:op.name==='invisible'});return;}
+  if(w&&w.toLowerCase()==='self'&&gpath(c.P)){guiSet(gpath(c.P),{hidden:op.name==='invisible'});return;}}return _da.apply(this,arguments);};
+})();
+
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
 function init(){if(!load())defaultPlace();lastSnap=snapState();bind();let dv=null;try{dv=localStorage.getItem('buildx-device');}catch(e){}setDevice(dv||(matchMedia('(pointer:coarse)').matches?'mob':'pc'));if(!dv)$('devpick').style.display='flex';applySettings();refreshToolbox();refreshAll();out('👋 Welcome to BuildX! '+Object.keys(CMDS).length+' commands, '+CATALOG.length+' things to insert. Press ▶ Play to test.');startIcons();requestAnimationFrame(frame);}
 
