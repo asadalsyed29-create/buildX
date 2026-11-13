@@ -1422,7 +1422,7 @@ function gameStep(dt0){const dt=dt0*G.ts;G.t+=dt;if(G.titleT>0)G.titleT-=dt0;if(
  let ix=joy.x+((K.d||K.arrowright)?1:0)-((K.a||K.arrowleft)?1:0),iy=joy.y+((K.s||K.arrowdown)?1:0)-((K.w||K.arrowup)?1:0);if(G.camMode==='side'){p.input.x=ix;p.input.y=0;}else{const mv=add(mul(f,-iy),mul(r,ix));p.input.x=mv[0];p.input.y=mv[2];}p.input.jump=jumpHeld||!!K[' '];p.input.down=downHeld||!!K.shift||!!K.control||!!K.q;
  G.bots.forEach(h=>botBrain(h,dt));
  G.parts.forEach(P=>{if(P.alive)partBehaviors(P,dt);});
- G.parts.forEach(P=>{P.obb=P.alive?obbOfSt(P.st):null;P.brad=len(P.st.Size)/2;if(P.obb&&P.dyn&&P.R)P.obb.ax=P.R;});
+ G.parts.forEach(P=>{P.obb=P.alive?obbOfSt(P.st):null;P.brad=len(P.st.Size)/2;if(P.obb&&P.obb.tm)P.brad=Math.max(P.brad,len(P.obb.h));if(P.obb&&P.dyn&&P.R)P.obb.ax=P.R;});
  G.solids=G.parts.filter(P=>P.alive&&P.collide&&P.st.Transparency<1.01);
  /* rigid bodies */G.bodies=G.bodies.filter(b=>b.alive);const N=4,h_=dt/N;const g=G.gravity;
  for(let s=0;s<N;s++){G.bodies.forEach(b=>{if(!b.alive||!b.dyn)return;if(b.sleep>1.2&&!b.wake){b.vel=[0,0,0];b.w=[0,0,0];return;}
@@ -6011,6 +6011,33 @@ const _rp=refreshProps;refreshProps=function(){_rp.apply(this,arguments);const p
 /* undo/redo or other changes: rebuild the panel */
 const _rs=restore;restore=function(){const r=_rs.apply(this,arguments);setTimeout(()=>{if(window.bxME&&bxME())panel();},0);return r;};
 window.bxMeshShapes=SHAPES;window.bxMeshGen=gen;window.bxMeshTools=TOOLS;window.bxMeshOne=ONE;window.bxMeshPanel=panel;
+})();
+
+/* ================= 27b. mesh parts use their real triangles for bumping, standing, touching and hits (holes and dents work) ================= */
+(function(){
+const TC=new Map();
+function triData(st){const M=window.bxMeshShape?bxMeshShape(st):st.Mesh;if(!M||!M.v||!M.t)return null;const k=JSON.stringify(M.v)+'|'+JSON.stringify(M.t)+'|'+st.Size.join(',')+'|'+(M.o?1:0);let D=TC.get(k);if(D)return D;
+ const V=M.v.map(p=>[p[0]*st.Size[0],p[1]*st.Size[1],p[2]*st.Size[2]]);const mn=[0,1,2].map(i=>Math.min(...V.map(p=>p[i]))),mx=[0,1,2].map(i=>Math.max(...V.map(p=>p[i])));const mid=mn.map((x,i)=>(x+mx[i])/2);
+ const T=[];M.t.forEach(([ia,ib,ic])=>{let a=V[ia],b=V[ib],c=V[ic];if(!a||!b||!c)return;let n=cross(sub(b,a),sub(c,a));const L=len(n);if(L<1e-10)return;n=mul(n,1/L);
+  if(!M.o){const ctr=mul(add(add(a,b),c),1/3);if(dot(n,sub(ctr,mid))<0){[b,c]=[c,b];n=mul(n,-1);}}
+  T.push({a,b,c,n,lo:[0,1,2].map(i=>Math.min(a[i],b[i],c[i])),hi:[0,1,2].map(i=>Math.max(a[i],b[i],c[i]))});});
+ D={T,h:[0,1,2].map(i=>Math.max(1e-3,Math.abs(mn[i]),Math.abs(mx[i])))};TC.set(k,D);if(TC.size>200)TC.delete(TC.keys().next().value);return D;}
+/* closest point on a triangle (from "Real-Time Collision Detection") */
+function cpTri(p,a,b,c){const ab=sub(b,a),ac=sub(c,a),ap=sub(p,a);const d1=dot(ab,ap),d2=dot(ac,ap);if(d1<=0&&d2<=0)return a;
+ const bp=sub(p,b);const d3=dot(ab,bp),d4=dot(ac,bp);if(d3>=0&&d4<=d3)return b;const vc=d1*d4-d3*d2;if(vc<=0&&d1>=0&&d3<=0)return add(a,mul(ab,d1/(d1-d3)));
+ const cp=sub(p,c);const d5=dot(ab,cp),d6=dot(ac,cp);if(d6>=0&&d5<=d6)return c;const vb=d5*d2-d1*d6;if(vb<=0&&d2>=0&&d6<=0)return add(a,mul(ac,d2/(d2-d6)));
+ const va=d3*d6-d5*d4;if(va<=0&&(d4-d3)>=0&&(d5-d6)>=0)return add(b,mul(sub(c,b),(d4-d3)/((d4-d3)+(d5-d6))));const den=1/(va+vb+vc);return add(a,add(mul(ab,vb*den),mul(ac,vc*den)));}
+function closest(D,l){let best=null,bd=1e18;for(const t of D.T){let o=0;for(let i=0;i<3;i++){const e=l[i]<t.lo[i]?t.lo[i]-l[i]:l[i]>t.hi[i]?l[i]-t.hi[i]:0;o+=e*e;}if(o>=bd)continue;const q=cpTri(l,t.a,t.b,t.c);const d=sub(l,q);const dd=dot(d,d);if(dd<bd){bd=dd;best={q,t,d2:dd};}}return best;}
+function rayT(D,o,d,maxT){let best=null;for(const t of D.T){const e1=sub(t.b,t.a),e2=sub(t.c,t.a),pv=cross(d,e2),det=dot(e1,pv);if(Math.abs(det)<1e-12)continue;const inv=1/det,tv=sub(o,t.a),u=dot(tv,pv)*inv;if(u<0||u>1)continue;const qv=cross(tv,e1),v=dot(d,qv)*inv;if(v<0||u+v>1)continue;const tt=dot(e2,qv)*inv;if(tt>=0&&tt<=maxT&&(best==null||tt<best))best=tt;}return best;}
+const RD=norm([0.5772,0.5774,0.5775]);
+function inside(D,l){for(let i=0;i<3;i++)if(Math.abs(l[i])>D.h[i]+1e-4)return false;let n=0;for(const t of D.T){const e1=sub(t.b,t.a),e2=sub(t.c,t.a),pv=cross(RD,e2),det=dot(e1,pv);if(Math.abs(det)<1e-12)continue;const inv=1/det,tv=sub(l,t.a),u=dot(tv,pv)*inv;if(u<0||u>1)continue;const qv=cross(tv,e1),v=dot(RD,qv)*inv;if(v<0||u+v>1)continue;if(dot(e2,qv)*inv>1e-7)n++;}return n%2===1;}
+const isM=st=>st&&st.Shape==='Mesh'&&st.Mesh&&st.Mesh.v&&st.Mesh.v.length>3&&st.Mesh.t&&st.Mesh.t.length;
+const _ob=obbOfSt;obbOfSt=function(st){const B=_ob.apply(this,arguments);if(isM(st)){const D=triData(st);if(D&&D.T.length){B.tm=D;B.h=D.h;}}return B;};
+const _cl=closestOBB;closestOBB=function(p,B){if(!B||!B.tm)return _cl.apply(this,arguments);const l=toLoc(p,B);if(inside(B.tm,l))return p.slice();const r=closest(B.tm,l);return r?toWld(r.q,B):p.slice();};
+const _in=insideOBB;insideOBB=function(p,B,pad){if(!B||!B.tm)return _in.apply(this,arguments);const l=toLoc(p,B);if(inside(B.tm,l))return true;if(!pad)return false;const r=closest(B.tm,l);return !!r&&r.d2<=pad*pad;};
+const _ry=rayOBB;rayOBB=function(o,d,B,maxT){if(!B||!B.tm)return _ry.apply(this,arguments);const lo=toLoc(o,B),ld=[dot(B.ax[0],d),dot(B.ax[1],d),dot(B.ax[2],d)];if(inside(B.tm,lo))return 0;return rayT(B.tm,lo,ld,maxT==null?1e9:maxT);};
+const _pe=penOBB;penOBB=function(p,B){if(!B||!B.tm)return _pe.apply(this,arguments);const l=toLoc(p,B);if(!inside(B.tm,l))return null;const r=closest(B.tm,l);if(!r)return null;const n=r.t.n;return {n:norm(add(add(mul(B.ax[0],n[0]),mul(B.ax[1],n[1])),mul(B.ax[2],n[2]))),depth:Math.sqrt(r.d2)};};
+window.bxMeshTris=triData;
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
