@@ -202,7 +202,7 @@ body.studio #keyshelp,body.guiedit #keyshelp,body.studio #dock,body.guiedit #doc
 .gx.ghide{display:none}.gx.gstart-hidden>.gi{opacity:.45;outline:1px dashed rgba(255,255,255,.5)}
 .gi{position:absolute;inset:0;display:flex;align-items:center;overflow:hidden;box-sizing:border-box;transition:transform .15s,filter .15s,box-shadow .15s;line-height:1.1;--d:.5s}
 .gtx{padding:0 6%;white-space:pre-wrap;word-break:break-word;width:100%}.gtx.small{font-size:11px;color:#666;position:absolute;bottom:4px;left:0;right:0;text-align:center}
-.gt-Button{cursor:pointer;box-shadow:inset 0 -4px 0 rgba(0,0,0,.22)}
+.gt-Button{cursor:pointer}
 .gt-Image img{width:100%;height:100%}.gph{width:60%;height:60%;margin:auto;fill:none;stroke:#888;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .gt-TextBox input{width:100%;height:100%;border:none;background:transparent;font:inherit;color:inherit;text-align:inherit;padding:0 6%;outline:none;user-select:text}
 .gt-Scroll{overflow-y:auto;overflow-x:hidden;display:block;scrollbar-width:thin}.gscroll{position:relative;width:100%}
@@ -330,8 +330,8 @@ body.playing.ctrl #ctrlexit{display:block}body.playing.ctrl.mob #downb{display:g
    <div class="hud" id="joyb"><div id="joyk"></div></div>
    <button class="hud" id="jumpb">JUMP</button>
    <button class="hud" id="stopb">■ Stop</button>
-   <button class="hud" id="pmbtn">☰ Menu</button>
-   <div class="hud" id="pmenu"><b style="color:#fff">🧪 Test tools</b><div id="pmtoggles"></div><button class="pmb" id="pm_reset">💥 Reset character</button><button class="pmb" id="pm_stop">■ Stop testing</button></div>
+   <button class="hud" id="pmbtn" aria-label="Menu"><i></i><i></i><i></i></button>
+   <div class="hud" id="pmenu"><div id="pmtoggles" style="display:none"></div><button class="pmb" id="pm_inv">Inventory</button><button class="pmb" id="pm_reset" style="display:none"></button><button class="pmb" id="pm_stop" style="display:none"></button></div>
    <button class="hud" id="downb">⬇</button><button class="hud" id="ctrlexit">✕ Stop flying</button>
    <div id="gmenu"></div>
   </div>
@@ -2645,12 +2645,12 @@ const _tp=togglePlay;togglePlay=function(){closeStudios();_tp();};
 (function(){
 const guisD=()=>{S.guis=S.guis||[];return S.guis;};window.guis=()=>G&&G.guiData?G.guiData:guisD();
 const uid=()=>Math.random().toString(36).slice(2,9);
-const TYPES=[['Frame','⬛','Frame'],['Text','🔤','Text'],['Button','🔘','Button'],['Image','🖼️','Image'],['TextBox','⌨️','Text box'],['Scroll','📜','Scroll box'],['Dropdown','▾','Dropdown'],['Slider','🎚','Slider'],['Toggle','🔁','Toggle'],['Progress','📊','Progress bar'],['Slot','▢','Inventory slot']];
-const GDEF={Frame:{w:40,h:44,bg:'#1d2230',alpha:0.88,radius:16,text:''},Text:{w:30,h:8,bg:'#000000',alpha:0,text:'Hello!',size:26,color:'#ffffff',bold:true},
- Button:{w:18,h:8,bg:'#3d8bff',alpha:1,radius:12,text:'Click me',size:20,color:'#ffffff',bold:true,hover:'none'},Image:{w:16,h:22,bg:'#ffffff',alpha:0,radius:10,img:'',fit:'contain'},
- TextBox:{w:28,h:7,bg:'#ffffff',alpha:1,radius:10,text:'',placeholder:'Type here…',size:18,color:'#15171c',var:'answer'},Scroll:{w:30,h:42,bg:'#1d2230',alpha:0.88,radius:14,content:260},
- Dropdown:{w:24,h:7,bg:'#ffffff',alpha:1,radius:10,options:'Red, Blue, Green',value:'Red',size:18,color:'#15171c',var:'choice'},Slider:{w:26,h:5,bg:'#2b2f3a',alpha:1,radius:20,min:0,max:100,value:50,color:'#3d8bff',var:'volume'},
- Toggle:{w:9,h:6,bg:'#555b68',alpha:1,radius:40,value:0,color:'#2fbf5b',var:'switch'},Progress:{w:30,h:4.5,bg:'#2b2f3a',alpha:1,radius:12,value:70,max:100,color:'#2fbf5b',var:'',text:''},Slot:{w:8,h:12,bg:'#1d2230',alpha:0.82,radius:12,text:'',color:'#ffffff',size:14,code:'#hold = all'}};
+const TYPES=[['Frame','⬛','Frame'],['Text','🔤','Text'],['Button','🔘','Button'],['Image','🖼️','Image'],['TextBox','⌨️','Text box'],['Scroll','📜','Scroll box'],['Dropdown','▾','Dropdown'],['Slider','🎚','Slider'],['Toggle','🔁','Toggle'],['Progress','📊','Progress bar'],['Slot','▢','Inventory slot'],['Shape','◆','Shape']];
+const GDEF={Frame:{w:40,h:44,bg:'#1d2230',alpha:0.88,radius:0,text:''},Text:{w:30,h:8,bg:'#000000',alpha:0,text:'Hello!',size:26,color:'#ffffff',bold:true},
+ Button:{w:18,h:8,bg:'#3d8bff',alpha:1,radius:0,text:'Click me',size:20,color:'#ffffff',bold:true,hover:'none'},Image:{w:16,h:22,bg:'#ffffff',alpha:0,radius:0,img:'',fit:'contain'},
+ TextBox:{w:28,h:7,bg:'#ffffff',alpha:1,radius:0,text:'',placeholder:'Type here…',size:18,color:'#15171c',var:'answer'},Scroll:{w:30,h:42,bg:'#1d2230',alpha:0.88,radius:0,content:260},
+ Dropdown:{w:24,h:7,bg:'#ffffff',alpha:1,radius:0,options:'Red, Blue, Green',value:'Red',size:18,color:'#15171c',var:'choice'},Slider:{w:26,h:5,bg:'#2b2f3a',alpha:1,radius:0,min:0,max:100,value:50,color:'#3d8bff',var:'volume'},
+ Toggle:{w:9,h:6,bg:'#555b68',alpha:1,radius:0,value:0,color:'#2fbf5b',var:'switch'},Progress:{w:30,h:4.5,bg:'#2b2f3a',alpha:1,radius:0,value:70,max:100,color:'#2fbf5b',var:'',text:''},Slot:{w:8,h:12,bg:'#3a3d44',alpha:1,radius:0,text:'',color:'#ffffff',size:14,code:'#hold = all',stroke:2,strokeColor:'#22242a',heldColor:'#ffffff',boxColor:'#5a5e68',showName:true,countColor:'#ffffff'},Shape:{w:12,h:20,bg:'#3d8bff',alpha:1,radius:0,shape:'Circle',text:'',size:20,color:'#ffffff',bold:true}};
 const FONTS={Rounded:'"Nunito","Arial Rounded MT Bold","Segoe UI",system-ui,sans-serif',Chunky:'"Arial Black",Impact,"Segoe UI Black",sans-serif',Handwritten:'"Comic Sans MS","Chalkboard SE","Marker Felt",cursive',Classic:'Georgia,"Times New Roman",serif',Typewriter:'"Courier New",ui-monospace,monospace',Clean:'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif'};
 const ENTER=['none','fade','pop','slide-up','slide-down','slide-left','slide-right','drop','spin','zoom'],LOOP=['none','pulse','bounce','float','shake','spin','wiggle','glow','rainbow','blink','heartbeat'],HOVER=['none','grow','shrink','lift','tilt','glow','brighten'];
 function newEl(type,over){return Object.assign({id:uid(),type,name:type+Math.floor(Math.random()*90+10),x:30,y:30,parent:null,z:1,visible:true,font:'Rounded',align:'center',stroke:0,strokeColor:'#000000',shadow:false,enter:'none',loop:'none',hover:'none',dur:0.5,code:''},clone(GDEF[type]),over||{});}
@@ -2662,9 +2662,9 @@ const hexA=(h,a)=>{const [r,g,b]=hex2rgb(COLOR_HEX(h)).map(v=>Math.round(v*255))
 function interp(s){return String(s==null?'':s).replace(/\{([a-z_0-9]+)\}/gi,(_,v)=>{if(!G)return '{'+v+'}';const x=getVar(v);return x==null?'':(typeof x==='number'?+x.toFixed(2):x);});}
 /* ---- layer ---- */
 let layer=null;function getLayer(){if(!layer){layer=document.createElement('div');layer.id='bxgui';$('view').appendChild(layer);}const r=$('view').getBoundingClientRect();layer.style.setProperty('--gs',(Math.max(240,r.height)/720)+'px');return layer;}
-function elStyle(el){const s=[];s.push(`left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${el.h}%;z-index:${el.z||1}`);return s.join(';');}
+function elStyle(el){const s=[];s.push(`left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${el.h}%;z-index:${el.z||1}`);if(el.rot)s.push(`rotate:${el.rot}deg`);return s.join(';');}
 function innerStyle(el){const s=[`background:${hexA(el.bg,el.alpha)}`,`border-radius:${el.radius||0}px`,`color:${COLOR_HEX(el.color||'#fff')}`,`font-family:${FONTS[el.font]||FONTS.Rounded}`,`font-size:calc(var(--gs) * ${el.size||18})`,`font-weight:${el.bold?800:500}`,`text-align:${el.align||'center'}`,`justify-content:${el.align==='left'?'flex-start':el.align==='right'?'flex-end':'center'}`];
- if(el.stroke)s.push(`border:${el.stroke}px solid ${COLOR_HEX(el.strokeColor||'#000')}`);if(el.shadow)s.push('box-shadow:0 6px 18px rgba(0,0,0,.45)');s.push(`--d:${el.dur||0.5}s`,`--ac:${COLOR_HEX(el.color||'#3d8bff')}`);return s.join(';');}
+ if(el.stroke)s.push(`border:${el.stroke}px solid ${COLOR_HEX(el.strokeColor||'#000')}`);if(el.shadow)s.push('box-shadow:0 6px 18px rgba(0,0,0,.45)');s.push(`--d:${el.dur||0.5}s`,`--ac:${COLOR_HEX(el.color||'#3d8bff')}`);if(window.bxShapeCSS){const c=bxShapeCSS(el);if(c)s.push(c);}return s.join(';');}
 function build(g,mode,host){/* mode: 'edit' | 'try' | 'play' */const L=host;const byP={};g.els.forEach(e=>{const k=e.parent&&g.els.some(x=>x.id===e.parent)?e.parent:'_';(byP[k]=byP[k]||[]).push(e);});
  const mk=(el,into)=>{if(mode==='play'&&el.visible===false&&!el._shown)return;const o=document.createElement('div');o.className='gx'+(el.enter&&el.enter!=='none'?' gxe-'+el.enter:'')+(mode==='edit'&&GE&&GE.sel===el.id?' gsel':'')+(el._hidden?' ghide':'');o.style.cssText=elStyle(el);o.dataset.id=el.id;
   if(mode==='edit'&&el.visible===false)o.classList.add('gstart-hidden');
@@ -2674,7 +2674,7 @@ function build(g,mode,host){/* mode: 'edit' | 'try' | 'play' */const L=host;cons
   into.appendChild(o);};
  (byP._||[]).sort((a,b)=>(a.z||1)-(b.z||1)).forEach(e=>mk(e,L));}
 function fill(el,i,mode,g){const t=el.type;const txt=mode==='play'?interp(el.text):el.text;
- if(t==='Text'||t==='Button'||t==='Frame'){if(el.text){const s=document.createElement('span');s.className='gtx';s.textContent=txt;if(mode==='play'&&/\{/.test(el.text))s.dataset.live='1';i.appendChild(s);}}
+ if(t==='Text'||t==='Button'||t==='Frame'||t==='Shape'){if(el.text){const s=document.createElement('span');s.className='gtx';s.textContent=txt;if(mode==='play'&&/\{/.test(el.text))s.dataset.live='1';i.appendChild(s);}}
  if(t==='Image'){if(el.img){const im=document.createElement('img');im.src=el.img;im.style.objectFit=el.fit||'contain';im.draggable=false;i.appendChild(im);}else if(mode!=='play'){i.innerHTML='<svg viewBox="0 0 48 36" class="gph"><path d="M3 3h42v30H3z M3 27l12-11 9 8 7-6 14 12 M33 11a3 3 0 1 0 .1 0"/></svg><span class="gtx small">Pick a picture</span>';}}
  if(t==='TextBox'){const inp=document.createElement('input');inp.placeholder=el.placeholder||'';inp.value=mode==='play'?(el._val||''):'';if(mode==='edit')inp.disabled=true;inp.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'&&mode==='play'){el._val=inp.value;setVar(el.var||el.name,inp.value);runEl(el,'change',inp.value);inp.blur();}};inp.onchange=()=>{if(mode==='play'){el._val=inp.value;setVar(el.var||el.name,inp.value);}};i.appendChild(inp);}
  if(t==='Dropdown'){const opts=String(el.options||'').split(',').map(x=>x.trim()).filter(Boolean);const cur=el._val!=null?el._val:el.value||opts[0]||'';const b=document.createElement('div');b.className='gdd';b.innerHTML=`<span>${esc(cur)}</span><svg viewBox="0 0 12 8"><path d="M1 1l5 5 5-5"/></svg>`;i.appendChild(b);
@@ -2686,7 +2686,7 @@ function fill(el,i,mode,g){const t=el.type;const txt=mode==='play'?interp(el.tex
  if(t==='Toggle'){const on=el._val!=null?!!el._val:!!+el.value;i.classList.toggle('on',on);i.innerHTML='<div class="gtg"><div class="gtgk"></div></div>';i.style.background=on?COLOR_HEX(el.color):hexA(el.bg,el.alpha);
   if(mode!=='edit')i.onclick=e=>{e.stopPropagation();el._val=on?0:1;const p=i.parentNode;const n2=document.createElement('div');p.replaceChild(n2,i);n2.className=i.className;n2.style.cssText=innerStyle(el);fill(el,n2,mode,g);if(mode==='play'){setVar(el.var||el.name,el._val);runEl(el,'change',el._val);}};}
  if(t==='Progress'){const mx=+el.max||100;const v=mode==='play'&&el.var?num(el.var,0):(el._val!=null?el._val:+el.value||0);i.innerHTML=`<div class="gpf" style="width:${clamp(v/mx,0,1)*100}%;background:${COLOR_HEX(el.color)};border-radius:${el.radius||0}px"></div>${el.text?`<span class="gtx">${esc(mode==='play'?interp(el.text):el.text)}</span>`:''}`;if(mode==='play')i.dataset.prog='1';}
- if(mode!=='edit'&&(t==='Button'||t==='Frame'||t==='Text'||t==='Image')){i.addEventListener('click',e=>{if(t!=='Button'&&!el.code)return;e.stopPropagation();if(mode==='play'){runEl(el,'click');sfx('click');}});}}
+ if(mode!=='edit'&&(t==='Button'||t==='Frame'||t==='Text'||t==='Image'||t==='Shape')){i.addEventListener('click',e=>{if(t!=='Button'&&!el.code)return;e.stopPropagation();if(mode==='play'){runEl(el,'click');sfx('click');}});}}
 function setVar(n,v){if(!G)return;G.vars[String(n).toLowerCase().trim()]=v;}
 /* ---- play-mode runtime ---- */
 function runEl(el,kind,val){if(!G||!el._P)return;const P=el._P;if(P.mainOps&&P.mainOps.length)P.threads.push(newThread(P.mainOps,G.player));if(kind==='click')fire(P,'on_click',null,G.player);if(kind==='choice')fire(P,'on_choice',val,G.player);}
@@ -2713,7 +2713,7 @@ function geOpen(g){if(window.bxCloseStudios)bxCloseStudios();GE={g,sel:null,prev
  d.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const p=GE.sel&&g.els.find(e=>e.id===GE.sel);const into=p&&(p.type==='Frame'||p.type==='Scroll')?p:null;const n0=g.els.filter(e=>e.parent===(into?into.id:null)).length%6;const el=newEl(b.dataset.add,{parent:into?into.id:null,z:(Math.max(0,...g.els.map(e=>e.z||1))+1)});el.x=+(50-el.w/2+(n0-2.5)*3).toFixed(1);el.y=+(50-el.h/2+(n0-2.5)*4).toFixed(1);
   if(into){el.w=Math.min(80,el.w*100/into.w);el.h=Math.min(80,el.h*100/into.h);el.x=+(50-el.w/2).toFixed(1);el.y=+(50-el.h/2+(n0-2.5)*6).toFixed(1);}g.els.push(el);GE.sel=el.id;commit();geDraw();});
  $('ge_try').onclick=()=>{GE.preview=!GE.preview;$('ge_try').classList.toggle('on',GE.preview);geDraw();};$('ge_replay').onclick=()=>geDraw();geDraw();}
-window.bxOpenGE=geOpen;
+window.bxOpenGE=geOpen;window.bxGEDraw=()=>geDraw();window.bxGERedraw=()=>geRedrawOnly();window.bxGENew=(t,o)=>newEl(t,o);window.bxGEFonts=FONTS;
 function geClose(){if(!GE)return;GE=null;document.body.classList.remove('guiedit');const d=$('geui');if(d)d.remove();if(layer){layer.innerHTML='';layer.className='';layer.onpointerdown=null;}commit();refreshAll();}
 window.bxCloseGE=geClose;
 function geDraw(){if(!GE)return;const L=getLayer();L.innerHTML='';L.className=GE.preview?'try':'edit';const host=document.createElement('div');host.className='ggui';L.appendChild(host);build(GE.g,GE.preview?'try':'edit',host);geSide();if(!GE.preview)bindEdit(L);}
@@ -2738,7 +2738,7 @@ function geSide(){const side=$('ge_side');if(!side||!GE)return;const g=GE.g;cons
   <div class="hint">Show or hide it from code with <b>#show_gui = ${esc(g.name)}</b> and <b>#hide_gui = ${esc(g.name)}</b>. Add things with the buttons at the top, then drag them around. Drag the corner to resize.</div>
   <div class="sh">Things in it</div><div class="clist">${g.els.length?g.els.map(x=>`<div class="citem" data-pick="${x.id}"><span class="csw" style="background:${hexA(x.bg,Math.max(0.3,x.alpha))}"></span>${esc(x.name)}<small>${x.type}${x.parent?' (inside)':''}</small></div>`).join(''):'<div class="hint">Empty. Add something with the buttons at the top.</div>'}</div>`;
   side.scrollTop=st;$('gg_show').onchange=e=>{g.show=e.target.checked;commit();};side.querySelectorAll('[data-pick]').forEach(r=>r.onclick=()=>{GE.sel=r.dataset.pick;geDraw();});return;}
- const T=el.type,hasText=['Text','Button','Frame','Progress'].includes(T);const parents=g.els.filter(x=>(x.type==='Frame'||x.type==='Scroll')&&x.id!==el.id);
+ const T=el.type,hasText=['Text','Button','Frame','Progress','Shape'].includes(T);const parents=g.els.filter(x=>(x.type==='Frame'||x.type==='Scroll')&&x.id!==el.id);
  const row=(l,h)=>`<div class="srow"><label>${l}</label>${h}</div>`;const n=(k,stp,mn,mx)=>`<input type="number" data-f="${k}" step="${stp||1}"${mn!=null?' min="'+mn+'"':''}${mx!=null?' max="'+mx+'"':''} value="${+(+el[k]||0).toFixed(2)}">`;
  let h=`<div class="sh">${esc(T==='TextBox'?'Text box':T==='Progress'?'Progress bar':T==='Scroll'?'Scroll box':T)}</div>`+row('Name',`<input data-f="name" value="${esc(el.name)}">`);
  if(hasText||T==='TextBox')h+=row(T==='TextBox'?'Starting text':'Text',`<input data-f="text" value="${esc(el.text||'')}" placeholder="${T==='Progress'?'(none)':''}">`)+`<div class="hint" style="padding:0 0 4px">Use {coins} or any variable in braces to show live numbers.</div>`;
@@ -4773,12 +4773,12 @@ window.bxAlert=m=>dlg(m);window.bxConfirm=m=>dlg(m,{ok:'OK',cancel:'Cancel'});wi
 (function(){
 const PRESETS={
  Low:{scale:0.6,shadows:0,detail:0,view:450,particles:0.3,fps:30},
- Medium:{scale:0.85,shadows:1,detail:1,view:1200,particles:0.6,fps:60},
- High:{scale:1,shadows:2,detail:1,view:3000,particles:1,fps:60},
+ Medium:{scale:0.85,shadows:0,detail:1,view:1200,particles:0.6,fps:60},
+ High:{scale:1,shadows:0,detail:1,view:3000,particles:1,fps:60},
  Ultra:{scale:1.35,shadows:3,detail:1,view:4000,particles:1,fps:0}};
 const isPhone=matchMedia('(pointer:coarse)').matches||innerWidth<760;
 let GX;try{GX=JSON.parse(localStorage.getItem('buildx-gfx')||'null');}catch(e){}
-if(!GX||!GX.preset)GX=Object.assign({preset:isPhone?'Medium':'High'},PRESETS[isPhone?'Medium':'High']);
+if(!GX||!GX.preset)GX=Object.assign({preset:isPhone?'Medium':'High'},PRESETS[isPhone?'Medium':'High']);if(!GX.mig2){if(GX.preset!=='Ultra')GX.shadows=0;GX.mig2=1;}
 const save=()=>{try{localStorage.setItem('buildx-gfx',JSON.stringify(GX));}catch(e){}};
 window.bxGfx=GX;
 
@@ -5242,12 +5242,12 @@ function slotItems(){/* which item each slot shows */const h=G.player;const I=h.
 function paintSlots(){if(!G||!G.player)return;const ly=$('bxgui');if(!ly)return;const nodes=ly.querySelectorAll('.gt-Slot');if(!nodes.length)return;const map=slotItems();const I=G.player.bxInv||{};
  nodes.forEach(i=>{const id=i.closest('.gx').dataset.id;const n=map[id];const k=n?(I[n]||0):0;const sig=(n||'')+'|'+k+'|'+(G.player.bxHeld===n);if(i.dataset.sig===sig)return;i.dataset.sig=sig;
   i.dataset.item=k>0?n:'';i.classList.toggle('held',!!n&&k>0&&G.player.bxHeld===n);
-  i.innerHTML=k>0?`<div class="gsi">${itemIcon(n)}</div><span class="gsn">${esc(n)}</span>${k>1?`<b class="gsc">${k}</b>`:''}`:'';});}
+  i.innerHTML=k>0?`<div class="gsi">${itemIcon(n)}</div><span class="gsn">${esc((window.bxItemSrc&&bxItemSrc(n)||{name:n}).name)}</span>${k>1?`<b class="gsc">${k}</b>`:''}`:'';});}
 const _hud=hud;hud=function(){_hud.apply(this,arguments);paintSlots();};
 document.addEventListener('click',e=>{if(!G||!e.target.closest)return;const i=e.target.closest('#bxgui.play .gt-Slot');if(!i||!i.dataset.item)return;const n=i.dataset.item,h=G.player;
- if(h.bxHeld===n){CMDS.use_item&&CMDS.use_item.hum(null,h,n);if(!(h.bxInv||{})[n])h.bxHeld=null;}else CMDS.equip&&CMDS.equip.hum(null,h,n);i.dataset.sig='';paintSlots();},true);
+ if(window.bxHoldItem)bxHoldItem(n);else if(h.bxHeld===n)h.bxHeld=null;else CMDS.equip&&CMDS.equip.hum(null,h,n);i.dataset.sig='';paintSlots();},true);
 /* in the editor a slot shows an empty box, so you can see where items will go */
-new MutationObserver(()=>{document.querySelectorAll('#bxgui:not(.play) .gt-Slot:not([data-ph])').forEach(i=>{i.dataset.ph='1';if(!i.innerHTML.trim())i.innerHTML='<div class="gsph"></div><span class="gsn">'+esc((()=>{const id=i.closest('.gx').dataset.id;const el=(S.guis||[]).flatMap(g=>g.els).find(x=>x.id===id);return el?'#hold = '+holdOf(el):'';})())+'</span>';});}).observe(document.body,{childList:true,subtree:true});
+new MutationObserver(()=>{document.querySelectorAll('#bxgui:not(.play) .gt-Slot:not([data-ph])').forEach(i=>{i.dataset.ph='1';if(!i.innerHTML.trim())i.innerHTML='<span class="gsn">'+esc((()=>{const id=i.closest('.gx').dataset.id;const el=(S.guis||[]).flatMap(g=>g.els).find(x=>x.id===id);return el?'#hold = '+holdOf(el):'';})())+'</span>';});}).observe(document.body,{childList:true,subtree:true});
 
 /* ---------- icon for a part: import a picture or make one from shapes ---------- */
 const SHAPES2={circle:'<circle cx="0" cy="0" r="50"/>',square:'<rect x="-50" y="-50" width="100" height="100" rx="8"/>',triangle:'<path d="M0-52L50 40H-50z"/>',diamond:'<path d="M0-55L45 0 0 55-45 0z"/>',
@@ -5435,19 +5435,259 @@ const _rp=refreshProps;refreshProps=function(){_rp.apply(this,arguments);const p
  pp.querySelectorAll('[data-mx]').forEach(b=>b.onclick=()=>{const k=b.dataset.mx;if(k==='edit')meOpen(o);else if(k==='make')texMaker(o);else if(k==='tpl')downloadTemplate(o);else if(k==='imp')importTexture(o);else{delete o.props.Texture;delete o.props.TexShapes;commit();refreshProps();}});};
 })();
 
-/* ================= 25. easy event lines: #touch = kill  ·  #click = explode ================= */
+/* ================= 26. user fixes: mesh collision, cheats, plain look, explorer buttons, menu + inventory + hotbar, GUI shapes/handles/names, docked animators ================= */
 (function(){
-/* #touch = X   means: when someone touches this, do X to them      (#if = toucher = touch = X = toucher)
-   #click = X   means: when someone clicks this, do X               (#on = click = X)                    */
-function easy(src){return String(src==null?'':src).split('\n').map(l=>{const m=l.match(/^(\s*)#\s*(touch|touched|click|clicked|tap|tapped)\s*=\s*(.+)$/i);if(!m)return l;let rest=m[3].trim();const ev=/^(touch|touched)$/i.test(m[2])?'touch':'click';
- const parts=rest.split(/\s*=\s*/);const n=parts[0].toLowerCase().replace(/\s+/g,'_');const C=CMDS[n];
- if(ev==='touch'){if(C&&C.tg){const who='toucher';if(parts.length===1)rest=parts[0]+' = '+who;else if(!/^(toucher|touched|everyone|all|player|self|bots)\b/i.test(parts[1]))rest=parts[0]+' = '+who+' : '+parts.slice(1).join(' = ');}
-  return m[1]+'#if = toucher = touch = '+rest;}
- return m[1]+'#on = click = '+rest;}).join('\n');}
-window.bxEasyCode=easy;
-const _c=compile;compile=function(src){return _c.call(this,easy(src));};
-const _k=checkCode;checkCode=function(src){return _k.call(this,easy(src));};
+/* ---------- mesh parts collide with their real (stretched) shape ----------
+   the shape is wrapped in many flat sides (a 98-sided hull), so pulled-out points block you too */
+const DIRS=(()=>{const d=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];const n=92,ga=Math.PI*(3-Math.sqrt(5));for(let i=0;i<n;i++){const y=1-(i+0.5)/n*2,r=Math.sqrt(1-y*y),a=i*ga;d.push([Math.cos(a)*r,y,Math.sin(a)*r]);}return d;})();
+const HC=new Map();
+function meshHull(st){const M=st.Mesh;const k=JSON.stringify(M.v)+'|'+st.Size.join(',');let H=HC.get(k);if(H)return H;
+ const V=M.v.map(p=>[p[0]*st.Size[0],p[1]*st.Size[1],p[2]*st.Size[2]]);const h=[0,1,2].map(i=>Math.max(1e-3,...V.map(p=>Math.abs(p[i]))));
+ const ld=DIRS.map(n=>Math.max(...V.map(p=>dot(n,p))));const ext=new Set();DIRS.forEach(n=>{let b=-1e9,bi=0;V.forEach((p,i)=>{const s=dot(n,p);if(s>b){b=s;bi=i;}});ext.add(bi);});
+ H={h,lp:DIRS,ld,vtx:[...ext].map(i=>[V[i][0]/h[0],V[i][1]/h[1],V[i][2]/h[2]])};HC.set(k,H);if(HC.size>200)HC.delete(HC.keys().next().value);return H;}
+const _ob=obbOfSt;obbOfSt=function(st){const B=_ob.apply(this,arguments);if(st&&st.Shape==='Mesh'&&st.Mesh&&st.Mesh.v&&st.Mesh.v.length>3){const H=meshHull(st);B.h=H.h;B.lp=H.lp;B.ld=H.ld;B.vtx=H.vtx;B.excl=['+0','-0','+1','-1','+2','-2'];}return B;};
+const _cl=closestOBB;closestOBB=function(p,B){if(!B||!B.ld)return _cl.apply(this,arguments);let l=toLoc(p,B);
+ for(let it=0;it<14;it++){let ok=true;for(let i=0;i<3;i++)l[i]=clamp(l[i],-B.h[i],B.h[i]);for(let j=0;j<B.lp.length;j++){const s=dot(B.lp[j],l)-B.ld[j];if(s>1e-6){l=sub(l,mul(B.lp[j],s));ok=false;}}if(ok)break;}return toWld(l,B);};
+const _in=insideOBB;insideOBB=function(p,B,pad){if(!B||!B.ld)return _in.apply(this,arguments);pad=pad||0;const l=toLoc(p,B);for(let j=0;j<B.lp.length;j++)if(dot(B.lp[j],l)>B.ld[j]+pad)return false;return true;};
+const _ry=rayOBB;rayOBB=function(o,d,B,maxT){if(!B||!B.ld)return _ry.apply(this,arguments);let t0=0,t1=maxT;const lo=toLoc(o,B),ld=[dot(B.ax[0],d),dot(B.ax[1],d),dot(B.ax[2],d)];
+ for(let j=0;j<B.lp.length;j++){const n=B.lp[j];const no=dot(n,lo)-B.ld[j],nd=dot(n,ld);if(Math.abs(nd)<1e-9){if(no>0)return null;continue;}const t=-no/nd;if(nd>0)t1=Math.min(t1,t);else t0=Math.max(t0,t);if(t0>t1)return null;}return t0;};
+const _pe=penOBB;penOBB=function(p,B){if(!B||!B.ld)return _pe.apply(this,arguments);const l=toLoc(p,B);let best=1e9,n=null;
+ for(let j=0;j<B.lp.length;j++){const q=B.lp[j];const pen=B.ld[j]-dot(q,l);if(pen<0)return null;if(pen<best){best=pen;n=norm(add(add(mul(B.ax[0],q[0]),mul(B.ax[1],q[1])),mul(B.ax[2],q[2])));}}return n?{n,depth:best}:null;};
+window.bxMeshHull=meshHull;
 })();
+
+/* ---------- bug fix: #bot_clone on the player (no saved bot to copy) ---------- */
+(function(){const C=CMDS.bot_clone;if(!C||!C.hum)return;const f=C.hum;C.hum=(c,h,a)=>{if(h&&h.o)return f(c,h,a);if(!h||G.bots.length>=80)return;
+ const o={id:'b'+Math.random(),cls:'Bot',name:(h.name||'Clone')+' clone',props:Object.assign(clone(BOT_DEF),{Position:add(h.pos,[3,1,0]),Behavior:'Static'}),code:''};addBot(o);};})();
+
+/* ---------- cheats: plain commands, aimed like any other (#fly = player_main, #if = toucher = touch = fly = toucher) ---------- */
+(function(){const CH=(name,help,ex,hum)=>reg('Cheats',name,help,ex,null,{hum,tg:true,touch:true});
+ const flyCls=()=>{if(G&&G.player)document.body.classList.toggle('flying',!!(G.player.fly||G.player.noclip));};
+ CH('fly','lets them fly: jump goes up, the down button goes down','#fly = player_main',(c,h)=>{h.fly=true;flyCls();});
+ CH('stop_flying','turns flying off','#stop_flying = player_main',(c,h)=>{h.fly=false;flyCls();});
+ CH('noclip','lets them fly through walls','#noclip = player_main',(c,h)=>{h.noclip=true;flyCls();});
+ CH('stop_noclip','walls stop them again','#stop_noclip = player_main',(c,h)=>{h.noclip=false;flyCls();});
+ CH('infinite_health','nothing can hurt or kill them','#infinite_health = player_main',(c,h)=>{h.inf=true;if(!h.dead)h.hp=h.max;});
+ CH('stop_infinite_health','they can be hurt again','#stop_infinite_health = player_main',(c,h)=>{h.inf=false;h.god=false;});
+ CH('super_speed','walks very fast (a number sets how fast)','#super_speed = player_main : 60',(c,h,a)=>{h.walk=num(a,60);});
+ CH('super_jump','jumps very high (a number sets how high)','#super_jump = player_main : 150',(c,h,a)=>{h.jp=num(a,150);});
+ CH('stop_cheats','turns every cheat off','#stop_cheats = player_main',(c,h)=>{h.fly=false;h.noclip=false;h.inf=false;h.god=false;h.walk=h.baseWalk||16;h.jp=50;flyCls();});
+ /* the old test switches set these every frame; now only commands do */
+ applyTests=function(){flyCls();};})();
+
+/* ---------- plain look: square corners, no shadows, no glassy blur (your own GUIs keep whatever you set) ---------- */
+(function(){const css=document.createElement('style');css.id='bxplain';css.textContent=`
+:where(*):not(#bxgui):not(#bxgui *):not(#joyb):not(#joyb *):not(#jumpb):not(#downb):not(#gehand *):not(.bxround){border-radius:0!important}
+:where(*):not(#bxgui):not(#bxgui *){box-shadow:none!important;text-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+#bxinv{display:none!important}`;document.head.appendChild(css);})();
+
+/* ---------- Explorer: buttons for add / copy / delete / rename (no holding needed) ---------- */
+(function(){const css=document.createElement('style');css.textContent=`
+#bxexbar{display:flex;flex-wrap:wrap;gap:4px;padding:6px 6px 4px;border-bottom:1px solid var(--ln);background:var(--pn)}
+#bxexbar button{flex:1 1 auto;min-width:0;background:var(--pn2);color:var(--tx);border:1px solid var(--ln);padding:7px 6px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+#bxexbar button:disabled{opacity:.4;cursor:default}#bxexbar button.del{color:#ff8a8a}`;document.head.appendChild(css);
+ const numSel=()=>sel.filter(id=>typeof id==='number'&&byId(id));
+ function bar(){const ex=$('explorer');if(!ex)return;let b=$('bxexbar');const show=['World','Scripts','Storage'].includes(exTab)&&!G;
+  if(!show){if(b)b.remove();return;}if(!b){b=document.createElement('div');b.id='bxexbar';ex.parentNode.insertBefore(b,ex);}
+  const n=numSel().length;b.innerHTML=`<button data-x="add">${exTab==='Scripts'?'Add script':'Add part'}</button><button data-x="dup"${n?'':' disabled'}>Duplicate</button><button data-x="ren"${n===1?'':' disabled'}>Rename</button><button class="del" data-x="del"${n?'':' disabled'}>Delete</button><button data-x="more"${n?'':' disabled'}>More</button>`;
+  b.querySelectorAll('button').forEach(x=>x.onclick=e=>{const a=x.dataset.x;
+   if(a==='add'){if(exTab==='Scripts'){newScript();return;}const ins=insertSpec({spec:[P_('Part','Block',[0,0.5,0],[4,1,2],'Medium stone grey','Plastic')]});const o=ins&&ins[0];if(o){if(exTab==='Storage')o.parent='Storage';sel=[o.id];commit();refreshAll();}return;}
+   if(a==='dup'){duplicateSel();return;}if(a==='del'){deleteSel();return;}
+   if(a==='ren'){const o=byId(numSel()[0]);if(o)bxPrompt('New name',o.name).then(v=>{if(v&&v.trim()){o.name=v.trim();commit();refreshAll();}});return;}
+   if(a==='more'){const r=x.getBoundingClientRect();ctxMenu(r.left,r.bottom+2);}});}
+ const _rx=refreshExplorer;refreshExplorer=function(){_rx.apply(this,arguments);try{bar();}catch(e){console.error(e);}};
+ const _sp=startPlay;startPlay=function(){const r=_sp.apply(this,arguments);bar();return r;};const _st=stopPlay;stopPlay=function(){const r=_st.apply(this,arguments);bar();return r;};
+ try{bar();}catch(e){}})();
+
+/* ---------- menu button (three lines) with Inventory, the inventory window, the 5-slot hotbar ---------- */
+(function(){
+const INV_DEF={Show:true,Title:'Inventory',Width:56,Height:58,Columns:6,WindowColor:'#2b2d33',BorderColor:'#16171a',TitleColor:'#ffffff',BoxColor:'#4a4d55',BoxBorder:'#5f636c',TextColor:'#ffffff',HeldColor:'#ffffff'};
+const HOT_DEF={Show:true,Slots:5,Size:58,SlotColor:'#2b2d33',BorderColor:'#16171a',BoxColor:'#4a4d55',HeldColor:'#ffffff',NumberColor:'#c9ccd3',CountColor:'#ffffff',Place:'Bottom',ShowNames:false};
+const invUI=()=>Object.assign({},INV_DEF,S.invUI||{});const hotUI=()=>Object.assign({},HOT_DEF,S.hotUI||{});window.bxInvUI=invUI;window.bxHotUI=hotUI;
+const css=document.createElement('style');css.textContent=`
+#pmbtn{width:46px;height:42px;padding:9px 10px!important;}body.playing #pmbtn{display:flex;}#pmbtn{flex-direction:column;justify-content:space-between;align-items:stretch;background:#2b2d33!important;border:2px solid #16171a!important}
+#pmbtn i{display:block;height:3px;background:#fff}
+#pmenu{width:180px!important;padding:4px!important;background:#2b2d33!important;border:2px solid #16171a!important;top:58px!important}
+#pmenu .pmb{margin:0!important;text-align:left;background:transparent!important;padding:10px 12px!important;font-size:14px}#pmenu .pmb:hover{background:#3a3d44!important}
+#bxinvwin{position:absolute;z-index:30;left:50%;top:50%;transform:translate(-50%,-50%);display:none;flex-direction:column;color:#fff;font:600 13px system-ui,sans-serif;pointer-events:auto;max-width:calc(100% - 24px);max-height:calc(100% - 24px)}
+#bxinvwin.open{display:flex}#bxinvwin .iwh{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;font-size:16px;font-weight:800}
+#bxinvwin .iwx{width:30px;height:30px;border:none;background:#c0392b;color:#fff;font-weight:900;font-size:15px;cursor:pointer}
+#bxinvwin .iwg{flex:1;overflow:auto;padding:8px;display:grid;gap:6px;align-content:start}
+#bxinvwin .iwc{position:relative;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;border:2px solid transparent;min-width:0}
+#bxinvwin .iwc .ic{width:60%;height:55%;display:flex;align-items:center;justify-content:center}#bxinvwin .iwc .ic>*{max-width:100%;max-height:100%}#bxinvwin .iwc .ic img{width:100%;height:100%;object-fit:contain}
+#bxinvwin .iwc span{font-size:11px;max-width:94%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#bxinvwin .iwc b{position:absolute;right:4px;bottom:2px;font-size:12px}
+#bxinvwin .iwe{color:#aab;padding:16px;text-align:center;grid-column:1/-1}
+#bxhot{position:absolute;z-index:14;display:none;gap:4px;pointer-events:auto;left:50%;bottom:12px;transform:translateX(-50%)}
+#bxhot.top{bottom:auto;top:12px}#bxhot.left,#bxhot.right{flex-direction:column;left:12px;bottom:auto;top:50%;transform:translateY(-50%)}#bxhot.right{left:auto;right:12px}
+#bxhot .hs{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:#fff;font:700 11px system-ui,sans-serif;border:2px solid;box-sizing:border-box;touch-action:manipulation;user-select:none}
+#bxhot .hs .ic{width:58%;height:58%;display:flex;align-items:center;justify-content:center}#bxhot .hs .ic>*{max-width:100%;max-height:100%}#bxhot .hs .ic img{width:100%;height:100%;object-fit:contain}
+#bxhot .hs small{position:absolute;left:4px;top:2px;font-size:10px}#bxhot .hs b{position:absolute;right:4px;bottom:2px;font-size:11px}#bxhot .hs span{font-size:9px;max-width:92%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.mob.playing #bxhot:not(.top):not(.left):not(.right){bottom:190px}`;document.head.appendChild(css);
+const win=document.createElement('div');win.id='bxinvwin';$('view').appendChild(win);const hot=document.createElement('div');hot.id='bxhot';$('view').appendChild(hot);
+win.addEventListener('pointerdown',e=>e.stopPropagation());hot.addEventListener('pointerdown',e=>e.stopPropagation());
+/* the part an item came from (Storage first), for its icon and settings */
+const srcOf=n=>{const k=nrmName(n);return S.items.find(o=>o.cls==='Part'&&o.parent==='Storage'&&nrmName(o.name)===k)||S.items.find(o=>o.cls==='Part'&&nrmName(o.name)===k);};
+window.bxItemSrc=srcOf;
+const disp=n=>{const o=srcOf(n);return o?o.name:n;};const canHold=n=>{const o=srcOf(n);return !(o&&o.props.CanHold===false);};
+const icon=n=>window.bxItemIcon?bxItemIcon(n):'';
+const inv=()=>(G&&G.player&&G.player.bxInv)||{};
+function hotSlots(){const h=G.player,I=inv(),N=Math.max(1,Math.min(10,hotUI().Slots|0||5));const A=h.bxHot||(h.bxHot=[]);
+ for(let i=0;i<A.length;i++)if(A[i]&&!(I[A[i]]>0))A[i]=null;Object.keys(I).forEach(n=>{if(!(I[n]>0)||A.includes(n))return;let e=-1;for(let i=0;i<N;i++)if(!A[i]){e=i;break;}if(e>=0)A[e]=n;});A.length=N;for(let i=0;i<N;i++)if(A[i]===undefined)A[i]=null;return A;}
+function hold(n){if(!G||!G.player||!n)return;const h=G.player;if(h.bxHeld===n){CMDS.unequip&&CMDS.unequip.hum(null,h,'');}else{if(!canHold(n)){toastMsg(n+' can\'t be held');return;}CMDS.equip&&CMDS.equip.hum(null,h,n);}hsig='';wsig='';draw();}
+window.bxHoldItem=hold;
+let hsig='',wsig='';
+function draw(){const on=!!(G&&G.player);
+ /* hotbar */const H=hotUI();const showH=on&&H.Show&&!(window.bxHasSlots&&bxHasSlots());
+ if(!showH){if(hot.style.display!=='none'){hot.style.display='none';hsig='';}}else{const A=hotSlots(),I=inv();const sg=JSON.stringify([A.map(n=>n&&[n,I[n]]),G.player.bxHeld,H]);if(sg!==hsig){hsig=sg;hot.style.display='flex';hot.className=(H.Place||'Bottom').toLowerCase();
+  hot.innerHTML=A.map((n,i)=>`<div class="hs" data-n="${n?esc(n):''}" style="width:${H.Size}px;height:${H.Size}px;background:${H.SlotColor};border-color:${n&&G.player.bxHeld===n?H.HeldColor:H.BorderColor}"><small style="color:${H.NumberColor}">${i+1}</small>${n?`<div class="ic">${icon(n)}</div>${H.ShowNames?`<span>${esc(disp(n))}</span>`:''}${I[n]>1?`<b style="color:${H.CountColor}">${I[n]}</b>`:''}`:''}</div>`).join('');}}
+ /* window */if(!win.classList.contains('open'))return;if(!on){win.classList.remove('open');return;}const U=invUI(),I=inv();const names=Object.keys(I).filter(n=>I[n]>0);const sg=JSON.stringify([names.map(n=>[n,I[n]]),G.player.bxHeld,U]);if(sg===wsig)return;wsig=sg;
+ win.style.cssText=`width:max(min(300px,100%),${U.Width}%);height:${U.Height}%;background:${U.WindowColor};border:2px solid ${U.BorderColor}`;
+ const wpx=win.getBoundingClientRect().width||300;const cols=Math.max(1,Math.min(U.Columns|0||6,Math.floor((wpx-16)/66)));
+ win.innerHTML=`<div class="iwh" style="color:${U.TitleColor};border-bottom:2px solid ${U.BorderColor}">${esc(U.Title)}<button class="iwx" aria-label="Close">X</button></div><div class="iwg" style="grid-template-columns:repeat(${cols},minmax(0,1fr))">${names.length?names.map(n=>`<div class="iwc" data-n="${esc(n)}" style="background:${U.BoxColor};border-color:${G.player.bxHeld===n?U.HeldColor:U.BoxBorder};color:${U.TextColor}"><div class="ic">${icon(n)}</div><span>${esc(disp(n))}</span>${I[n]>1?`<b>${I[n]}</b>`:''}</div>`).join(''):`<div class="iwe">Nothing here yet. Things you collect go here.</div>`}</div>`;
+ win.querySelector('.iwx').onclick=()=>openWin(false);}
+function openWin(v){win.classList.toggle('open',v);wsig='';$('pmenu').classList.remove('open');draw();}
+window.bxOpenInventory=openWin;
+win.addEventListener('click',e=>{const c=e.target.closest('.iwc');if(c)hold(c.dataset.n);});
+hot.addEventListener('click',e=>{const c=e.target.closest('.hs');if(c&&c.dataset.n)hold(c.dataset.n);});
+addEventListener('keydown',e=>{if(!G||/INPUT|TEXTAREA/.test((document.activeElement||{}).tagName||''))return;if(/^[1-9]$/.test(e.key)){const A=G.player&&G.player.bxHot;const n=A&&A[+e.key-1];if(n)hold(n);}if(e.key==='Tab'||e.key.toLowerCase()==='i'&&e.shiftKey){e.preventDefault();openWin(!win.classList.contains('open'));}});
+$('pm_inv').onclick=e=>{e.stopPropagation();openWin(!win.classList.contains('open'));};
+const _h=hud;hud=function(){_h.apply(this,arguments);draw();};
+const _s=stopPlay;stopPlay=function(){const r=_s.apply(this,arguments);hot.style.display='none';hsig='';openWin(false);return r;};
+/* the menu button only shows the menu (no test tools any more) */
+const pb=$('pmbtn');if(pb)pb.onclick=e=>{e.stopPropagation();$('pmenu').classList.toggle('open');$('pmenu').style.display='';};
+const pmShow=()=>{const b=$('pmbtn');if(b)b.style.display=invUI().Show?'':'none';};const _sp=startPlay;startPlay=function(){const r=_sp.apply(this,arguments);pmShow();return r;};
+document.addEventListener('pointerdown',e=>{const m=$('pmenu');if(m&&m.classList.contains('open')&&!e.target.closest('#pmenu,#pmbtn'))m.classList.remove('open');},true);
+
+/* ---------- Explorer (Players tab): Inventory and Hotbar, set up in Properties ---------- */
+const _rx=refreshExplorer;refreshExplorer=function(){_rx.apply(this,arguments);if(exTab!=='Players')return;const ex=$('explorer');
+ const d=document.createElement('div');d.innerHTML=[['bx:inv','Inventory'],['bx:hot','Hotbar']].map(([id,n])=>`<div class="er${sel[0]===id?' sel':''}" data-bxui="${id}" style="padding-left:6px"><span class="tw"></span>${n}</div>`).join('');
+ ex.appendChild(d);d.querySelectorAll('[data-bxui]').forEach(r=>r.onclick=()=>{sel=[r.dataset.bxui];refreshAll();});};
+const ROWS={'bx:inv':[['Show','Menu button with the inventory','bool'],['Title','Title','text'],['Width','Width (% of screen)','num'],['Height','Height (% of screen)','num'],['Columns','Boxes in a row','num'],['WindowColor','Window color','color'],['BorderColor','Border color','color'],['TitleColor','Title color','color'],['BoxColor','Item box color','color'],['BoxBorder','Item box border','color'],['HeldColor','Held item outline','color'],['TextColor','Text color','color']],
+ 'bx:hot':[['Show','Show the hotbar','bool'],['Slots','Slots','num'],['Size','Slot size','num'],['Place','Where','pick',['Bottom','Top','Left','Right']],['SlotColor','Slot color','color'],['BorderColor','Slot border','color'],['HeldColor','Held item outline','color'],['NumberColor','Number color','color'],['CountColor','Count color','color'],['ShowNames','Show item names','bool']]};
+const _rp=refreshProps;refreshProps=function(){const id=sel[0];if(!ROWS[id])return _rp.apply(this,arguments);const pp=$('props');const key=id==='bx:inv'?'invUI':'hotUI';const U=id==='bx:inv'?invUI():hotUI();
+ pp.innerHTML=`<div class="hint">${id==='bx:inv'?'The inventory opens from the menu button (three lines) while playing. Everything you collect is in it. Tap an item to hold it, tap again to put it away.':'The hotbar shows your first items in fixed slots. Tap a slot (or press 1-9) to hold that item. It hides when your GUI has its own inventory slots.'}</div>`+
+  ROWS[id].map(([k,l,t,opts])=>propRow(l,t==='bool'?`<input type="checkbox" data-u="${k}"${U[k]?' checked':''}>`:t==='color'?`<input type="color" data-u="${k}" value="${COLOR_HEX(U[k])}">`:t==='num'?`<input type="number" data-u="${k}" value="${U[k]}">`:t==='pick'?`<select data-u="${k}">${opts.map(o=>`<option${o===U[k]?' selected':''}>${o}</option>`).join('')}</select>`:`<input data-u="${k}" value="${esc(U[k])}">`)).join('')+
+  `<div class="pr"><label></label><div><button class="tb" data-u-reset="1">Back to normal</button></div></div>`;
+ pp.querySelectorAll('[data-u]').forEach(i=>i.addEventListener('change',()=>{const k=i.dataset.u;S[key]=S[key]||{};S[key][k]=i.type==='checkbox'?i.checked:i.type==='number'?(parseFloat(i.value)||0):i.value;commit();hsig='';wsig='';}));
+ pp.querySelector('[data-u-reset]').onclick=()=>{S[key]={};commit();refreshProps();};};
+
+/* ---------- collectables: can it be held, how it looks in your hand ---------- */
+const isColl=o=>o&&o.cls==='Part'&&/(^|\n)\s*#\s*collectable\b/i.test(o.code||'');
+const _rp2=refreshProps;refreshProps=function(){_rp2.apply(this,arguments);const o=typeof sel[0]==='number'?byId(sel[0]):null;if(!isColl(o))return;const pp=$('props');const P=o.props;
+ const w=document.createElement('div');w.innerHTML=`<div class="ph" style="margin-top:6px">Collectable</div>`+propRow('Can hold it',`<input type="checkbox" data-c="CanHold"${P.CanHold!==false?' checked':''}>`)+
+  propRow('In your hand',`<select data-c="HeldLook">${[['Part','The part itself'],['None','Nothing shown']].map(([v,l])=>`<option value="${v}"${(P.HeldLook||'Part')===v?' selected':''}>${l}</option>`).join('')}</select>`)+
+  propRow('Size in hand',`<input type="number" step="0.1" data-c="HeldSize" value="${P.HeldSize||1}">`)+propRow('Turn in hand',`<input type="number" step="15" data-c="HeldTurn" value="${P.HeldTurn||0}">`)+
+  propRow('Hand color',`<input type="color" data-c="HeldColor" value="${COLOR_HEX(P.HeldColor||P.Color||'#ffffff')}"> <button class="tb" data-c-clr="1">Same as part</button>`)+
+  `<div class="hint">Its picture in the inventory and hotbar is the Inventory icon above.</div>`;
+ pp.appendChild(w);w.querySelectorAll('[data-c]').forEach(i=>i.addEventListener('change',()=>{const k=i.dataset.c;P[k]=i.type==='checkbox'?i.checked:i.type==='number'?(parseFloat(i.value)||0):i.value;commit();}));
+ w.querySelector('[data-c-clr]').onclick=()=>{delete P.HeldColor;commit();refreshProps();};};
+if(CMDS.equip){const f=CMDS.equip.hum;CMDS.equip.hum=(c,h,a)=>{const n=String(a||'').split(':')[0].trim();if(n&&!canHold(n)){if(h===G.player)toastMsg(n+' can\'t be held');return;}return f(c,h,a);};}
+/* draw the held item in front of whoever holds it */
+const _dl=drawList;drawList=function(forPick){const L=_dl.apply(this,arguments);if(!G||forPick)return L;
+ G.humans.forEach(h=>{if(!h||h.dead||h.invis||!h.bxHeld)return;const o=srcOf(h.bxHeld);if(!o)return;const P=o.props;if(P.HeldLook==='None')return;
+  const hs=h.size||1;const y=(h.yaw||0)*Math.PI/180;const f=[Math.sin(y),0,Math.cos(y)],r=[Math.cos(y),0,-Math.sin(y)];const big=Math.max(...P.Size);const k=Math.min(1,1.6/big)*hs*(P.HeldSize||1);
+  const st={Position:add(h.pos,add(add(mul(r,-1.9*hs),mul(f,0.9*hs)),[0,2.3*hs,0])),Orientation:[0,(h.yaw||0)+(P.HeldTurn||0),0],Size:P.Size.map(v=>v*k),Shape:P.Shape,Color:P.HeldColor||P.Color,Material:P.Material,Transparency:Math.min(P.Transparency||0,0.6),Reflectance:P.Reflectance||0};
+  if(st.Shape==='Mesh')st.Shape='Block';pickTable.push({h});L.push({m:partMatrix(st),mesh:GEO[st.Shape]||GEO.Block,col:st.Color,mat:matIndex(st.Material),alpha:1-st.Transparency,refl:st.Reflectance,size:st.Size,pid:pickTable.length});});return L;};
+})();
+
+/* ---------- GUI: shapes for any GUI thing (plus your own shape from points), turn, slot looks, handles like the 3D tools ---------- */
+(function(){
+const POLY={Triangle:[[50,0],[100,100],[0,100]],'Right triangle':[[0,0],[100,100],[0,100]],Diamond:[[50,0],[100,50],[50,100],[0,50]],Pentagon:[[50,0],[100,38],[81,100],[19,100],[0,38]],
+ Hexagon:[[25,0],[75,0],[100,50],[75,100],[25,100],[0,50]],Octagon:[[30,0],[70,0],[100,30],[100,70],[70,100],[30,100],[0,70],[0,30]],
+ Star:[[50,0],[61,35],[98,35],[68,57],[79,91],[50,70],[21,91],[32,57],[2,35],[39,35]],Arrow:[[0,30],[60,30],[60,5],[100,50],[60,95],[60,70],[0,70]],
+ Cross:[[35,0],[65,0],[65,35],[100,35],[100,65],[65,65],[65,100],[35,100],[35,65],[0,65],[0,35],[35,35]],Parallelogram:[[25,0],[100,0],[75,100],[0,100]],Trapezoid:[[20,0],[80,0],[100,100],[0,100]]};
+const SHAPES=['Rectangle','Circle',...Object.keys(POLY),'Custom'];window.bxGuiShapes=SHAPES;
+const ptsOf=el=>Array.isArray(el.pts)&&el.pts.length>=3?el.pts:[[50,0],[100,100],[0,100]];
+window.bxShapeCSS=function(el){const o=[];const sh=el.shape||'Rectangle';
+ if(sh==='Circle')o.push('clip-path:ellipse(50% 50% at 50% 50%)');else if(POLY[sh])o.push('clip-path:polygon('+POLY[sh].map(p=>p[0]+'% '+p[1]+'%').join(',')+')');else if(sh==='Custom')o.push('clip-path:polygon('+ptsOf(el).map(p=>p[0]+'% '+p[1]+'%').join(',')+')');
+ if(el.type==='Slot'){o.push('--held:'+COLOR_HEX(el.heldColor||'#ffffff'),'--box:'+(el.boxColor?COLOR_HEX(el.boxColor):'transparent'),'--cnt:'+COLOR_HEX(el.countColor||'#ffffff'),'--nm:'+(el.showName===false?'none':'block'));}
+ return o.join(';');};
+const css=document.createElement('style');css.textContent=`
+.gt-Slot.held{outline:3px solid var(--held,#fff)!important;outline-offset:-3px}.gt-Slot .gsc{color:var(--cnt,#fff)!important}.gt-Slot .gsn{display:var(--nm,block)!important}
+.gt-Slot .gsi{background:var(--box,transparent)}.gt-Slot .gsi i{box-shadow:none!important;border-radius:0!important}.gt-Slot .gsph{display:none!important}
+#gehand{position:absolute;inset:0;pointer-events:none;z-index:19}#gehand>*{pointer-events:auto;position:absolute;touch-action:none}
+#gehand .ax{height:0;transform-origin:0 50%}#gehand .ax i{position:absolute;left:0;top:-3px;height:6px;right:12px}#gehand .ax b{position:absolute;right:-2px;top:-9px;width:0;height:0;border-top:9px solid transparent;border-bottom:9px solid transparent;border-left:16px solid}
+#gehand .ax.x i{background:#e53935}#gehand .ax.x b{border-left-color:#e53935}#gehand .ax.y i{background:#43a047}#gehand .ax.y b{border-left-color:#43a047}
+#gehand .ax .hit{position:absolute;left:0;right:-6px;top:-14px;height:28px;cursor:grab}
+#gehand .mc{width:18px;height:18px;margin:-9px 0 0 -9px;background:#ffd23f;border:2px solid #1b1c20;cursor:move}
+#gehand .box{pointer-events:none!important;border:1px dashed #ffd23f}#gehand .box>*{pointer-events:auto;position:absolute;touch-action:none}
+#gehand .ball{width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%!important;background:#2f7cf6;border:2px solid #fff;cursor:pointer}
+#gehand .ball.c{background:#9aa3b5}
+#gehand .ring{border-radius:50%!important;border:4px solid #f5a623;background:transparent;cursor:grab;box-sizing:border-box}#gehand .ring:after{content:'';position:absolute;inset:6px;border-radius:50%;pointer-events:none}
+#gehand .knob{width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%!important;background:#f5a623;border:2px solid #fff;cursor:grab}
+#gehand .pt{width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%!important;background:#fff;border:3px solid #7a4cff;cursor:move}#gehand .pt.on{background:#7a4cff;border-color:#fff}
+#bxgui.edit .grs{display:none}
+.getools{display:inline-flex;gap:4px}.getools button{font:inherit;font-weight:700;padding:6px 10px;background:#2b2d33;color:#fff;border:1px solid #555a66;cursor:pointer}.getools button.on{background:#2f7cf6;border-color:#2f7cf6}`;document.head.appendChild(css);
+let tool='move',ptEdit=false,ptSel=-1;
+const GEo=()=>window.bxGE;const curEl=()=>{const E=GEo();return E&&E.sel&&E.g.els.find(x=>x.id===E.sel);};
+const hand=()=>{let h=$('gehand');if(!h){h=document.createElement('div');h.id='gehand';$('view').appendChild(h);}return h;};
+const r1=v=>Math.round(v*10)/10;
+function place(){const E=GEo();const H=hand();const el=curEl();if(!E||E.preview||!el||document.body.classList.contains('ganim')){if(H.innerHTML)H.innerHTML='';return;}
+ const node=document.querySelector(`#bxgui .gx[data-id="${el.id}"]`);if(!node){if(H.innerHTML)H.innerHTML='';return;}const vr=$('view').getBoundingClientRect(),nr=node.getBoundingClientRect();
+ const cx=nr.left+nr.width/2-vr.left,cy=nr.top+nr.height/2-vr.top,w=node.offsetWidth,h=node.offsetHeight,rot=el.rot||0;let html='';
+ if(tool==='move'){const L=Math.max(46,Math.min(90,Math.max(w,h)/2+30));html=`<div class="ax x" data-h="x" style="left:${cx}px;top:${cy}px;width:${L}px"><i></i><b></b><span class="hit"></span></div><div class="ax y" data-h="y" style="left:${cx}px;top:${cy}px;width:${L}px;rotate:-90deg"><i></i><b></b><span class="hit"></span></div><div class="mc" data-h="xy" style="left:${cx}px;top:${cy}px"></div>`;}
+ if(tool==='size'||ptEdit){html+=`<div class="box" style="left:${cx-w/2}px;top:${cy-h/2}px;width:${w}px;height:${h}px;rotate:${rot}deg">`;
+  if(ptEdit&&(el.shape==='Custom'))html+=ptsOf(el).map((p,i)=>`<div class="pt${i===ptSel?' on':''}" data-pt="${i}" style="left:${p[0]}%;top:${p[1]}%"></div>`).join('');
+  else[[0,50,'-x'],[100,50,'+x'],[50,0,'-y'],[50,100,'+y'],[0,0,'-x-y'],[100,0,'+x-y'],[0,100,'-x+y'],[100,100,'+x+y']].forEach(([x,y,k])=>{html+=`<div class="ball${k.length>2?' c':''}" data-s="${k}" style="left:${x}%;top:${y}%"></div>`;});html+='</div>';}
+ if(tool==='turn'&&!ptEdit){const R=Math.max(w,h)/2+22;const a=(rot-90)*Math.PI/180;html=`<div class="ring" data-h="ring" style="left:${cx-R}px;top:${cy-R}px;width:${2*R}px;height:${2*R}px"></div><div class="knob" data-h="ring" style="left:${cx+Math.cos(a)*R}px;top:${cy+Math.sin(a)*R}px"></div>`;}
+ if(H.innerHTML!==html)H.innerHTML=html;H.dataset.cx=cx;H.dataset.cy=cy;H.dataset.w=w;H.dataset.h=h;}
+window.bxGEHandles=place;
+function drag(e,onMove){e.preventDefault();e.stopPropagation();const el=curEl();if(!el)return;const node=document.querySelector(`#bxgui .gx[data-id="${el.id}"]`);if(!node)return;const pr=node.parentNode.getBoundingClientRect();
+ const st={x:e.clientX,y:e.clientY,el:JSON.parse(JSON.stringify(el)),pr,w:node.offsetWidth,h:node.offsetHeight,nr:node.getBoundingClientRect()};let moved=false;
+ const mv=ev=>{moved=true;onMove(ev,st,el);bxGERedraw();place();};const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);if(moved){commit();bxGEDraw();}place();};
+ addEventListener('pointermove',mv);addEventListener('pointerup',up);addEventListener('pointercancel',up);}
+hand().addEventListener('pointerdown',e=>{const t=e.target.closest('[data-h],[data-s],[data-pt]');if(!t)return;
+ if(t.dataset.pt!=null){ptSel=+t.dataset.pt;place();drag(e,(ev,st,el)=>{const box=hand().querySelector('.box');const r=box.getBoundingClientRect();const cx=r.left+r.width/2,cy=r.top+r.height/2;const a=-(el.rot||0)*Math.PI/180;
+   const dx=ev.clientX-cx,dy=ev.clientY-cy;const lx=dx*Math.cos(a)-dy*Math.sin(a),ly=dx*Math.sin(a)+dy*Math.cos(a);el.pts=ptsOf(el).map(p=>p.slice());el.pts[ptSel]=[r1(Math.max(-50,Math.min(150,50+lx/st.w*100))),r1(Math.max(-50,Math.min(150,50+ly/st.h*100)))];});return;}
+ const h=t.dataset.h,s=t.dataset.s;
+ if(h==='x'||h==='y'||h==='xy'){drag(e,(ev,st,el)=>{const dx=(ev.clientX-st.x)/st.pr.width*100,dy=(ev.clientY-st.y)/st.pr.height*100;const sn=v=>Math.round(v*2)/2;if(h!=='y')el.x=sn(st.el.x+dx);if(h!=='x')el.y=sn(st.el.y+dy);});return;}
+ if(h==='ring'){drag(e,(ev,st,el)=>{const cx=st.nr.left+st.nr.width/2,cy=st.nr.top+st.nr.height/2;let a=Math.atan2(ev.clientY-cy,ev.clientX-cx)*180/Math.PI+90;a=((a%360)+360)%360;if(a>180)a-=360;const sn=Math.round(a/15)*15;if(Math.abs(a-sn)<4)a=sn;el.rot=Math.round(a);});return;}
+ if(s){drag(e,(ev,st,el)=>{const a=(st.el.rot||0)*Math.PI/180,ca=Math.cos(a),sa=Math.sin(a);const dx=ev.clientX-st.x,dy=ev.clientY-st.y;const lx=dx*ca+dy*sa,ly=-dx*sa+dy*ca;
+   let dw=0,dh=0,sx=0,sy=0;if(s.includes('+x')){dw=lx;sx=1;}if(s.includes('-x')){dw=-lx;sx=-1;}if(s.includes('+y')){dh=ly;sy=1;}if(s.includes('-y')){dh=-ly;sy=-1;}
+   const nw=Math.max(6,st.w+dw),nh=Math.max(6,st.h+dh);const ox=sx*(nw-st.w)/2,oy=sy*(nh-st.h)/2;const cdx=ox*ca-oy*sa,cdy=ox*sa+oy*ca;
+   const W=st.pr.width,Hh=st.pr.height;const ccx=(st.el.x+st.el.w/2)/100*W+cdx,ccy=(st.el.y+st.el.h/2)/100*Hh+cdy;el.w=r1(nw/W*100);el.h=r1(nh/Hh*100);el.x=r1(ccx/W*100-el.w/2);el.y=r1(ccy/Hh*100-el.h/2);});}});
+/* tool buttons in the GUI editor's top bar + extra rows in its side panel */
+function addTools(){const top=document.querySelector('#geui .stop');if(!top||top.querySelector('.getools'))return;const d=document.createElement('span');d.className='getools';
+ d.innerHTML=[['move','Move'],['size','Size'],['turn','Turn']].map(([k,l])=>`<button data-t="${k}" class="${k===tool?'on':''}">${l}</button>`).join('');const ref=top.querySelector('.stt')||top.querySelector('#ge_done');top.insertBefore(d,ref?(ref.id==='ge_done'?ref.nextSibling:ref):null);
+ d.querySelectorAll('button').forEach(b=>b.onclick=()=>{tool=b.dataset.t;ptEdit=false;d.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));place();});}
+function addRows(){const side=$('ge_side');const el=curEl();if(!side||!el||side.querySelector('.bxrows'))return;const heads=[...side.querySelectorAll('.sh')];const place2=heads.find(x=>x.textContent==='Place');if(!place2)return;
+ const row=(l,h)=>`<div class="srow"><label>${l}</label>${h}</div>`;const sel=(k,arr,cur)=>`<select data-x="${k}">${arr.map(a=>`<option${a===cur?' selected':''}>${a}</option>`).join('')}</select>`;
+ let h=`<div class="sh">Shape</div>`+row('Shape',sel('shape',SHAPES,el.shape||'Rectangle'))+row('Turn (degrees)',`<input type="number" step="15" data-x="rot" value="${el.rot||0}">`);
+ if(el.shape==='Custom')h+=row('Points',`<button class="tb" data-b="pts">${ptEdit?'Stop editing points':'Edit points'}</button>`)+(ptEdit?row('',`<button class="tb" data-b="addpt">Add point</button><button class="tb" data-b="delpt">Delete point</button><button class="tb" data-b="ptreset">Start over</button>`)+'<div class="hint" style="padding:0 0 4px">Drag the purple dots. Add point puts a new one after the picked dot.</div>':'');
+ if(el.type==='Slot')h+=`<div class="sh">Inventory slot</div>`+row('Held outline',`<input type="color" data-x="heldColor" value="${COLOR_HEX(el.heldColor||'#ffffff')}">`)+row('Icon box',`<input type="color" data-x="boxColor" value="${COLOR_HEX(el.boxColor||'#5a5e68')}"> <button class="tb" data-b="nobox">None</button>`)+row('Count color',`<input type="color" data-x="countColor" value="${COLOR_HEX(el.countColor||'#ffffff')}">`)+row('Show name',`<input type="checkbox" data-x="showName"${el.showName!==false?' checked':''}>`);
+ const w=document.createElement('div');w.className='bxrows';w.innerHTML=h;side.insertBefore(w,place2);
+ w.querySelectorAll('[data-x]').forEach(i=>i.addEventListener('change',()=>{const k=i.dataset.x;let v=i.type==='checkbox'?i.checked:i.type==='number'?(parseFloat(i.value)||0):i.value;el[k]=v;if(k==='shape'&&v==='Custom'&&!Array.isArray(el.pts))el.pts=[[50,0],[100,100],[0,100]];if(k==='shape')ptEdit=v==='Custom';commit();bxGEDraw();}));
+ const B=(k,f)=>{const b=w.querySelector(`[data-b="${k}"]`);if(b)b.onclick=f;};
+ B('pts',()=>{ptEdit=!ptEdit;ptSel=-1;bxGEDraw();});B('nobox',()=>{el.boxColor='';commit();bxGEDraw();});
+ B('addpt',()=>{const P=ptsOf(el).map(p=>p.slice());const i=ptSel>=0?ptSel:P.length-1;const a=P[i],b=P[(i+1)%P.length];P.splice(i+1,0,[r1((a[0]+b[0])/2),r1((a[1]+b[1])/2)]);el.pts=P;ptSel=i+1;commit();bxGEDraw();});
+ B('delpt',()=>{const P=ptsOf(el).map(p=>p.slice());if(P.length<=3||ptSel<0){toastEd(P.length<=3?'A shape needs at least 3 points':'Tap a dot first');return;}P.splice(ptSel,1);el.pts=P;ptSel=-1;commit();bxGEDraw();});
+ B('ptreset',()=>{el.pts=[[50,0],[100,100],[0,100]];ptSel=-1;commit();bxGEDraw();});}
+let busy=false;new MutationObserver(recs=>{if(busy||recs.every(r=>r.target.closest&&r.target.closest('#gehand')))return;busy=true;try{if(!GEo()){const H=$('gehand');if(H&&H.innerHTML)H.innerHTML='';ptEdit=false;}else{addTools();addRows();place();}}catch(e){console.error(e);}busy=false;}).observe($('view'),{childList:true,subtree:true});
+addEventListener('resize',()=>setTimeout(place,50));
+/* Explorer GUI tab: rename GUIs and the things inside them */
+const _rx=refreshExplorer;refreshExplorer=function(){_rx.apply(this,arguments);if(exTab!=='GUI')return;const ex=$('explorer');const L=S.guis||[];
+ ex.querySelectorAll('[data-ge]').forEach(r=>{const g=L[+r.dataset.gi];const el=g&&g.els.find(x=>x.id===r.dataset.ge);if(!el)return;const b=document.createElement('button');b.className='tb';b.textContent='Rename';b.style.cssText='float:right;padding:2px 8px;font-size:11px;margin-right:4px';
+  b.onclick=ev=>{ev.stopPropagation();bxPrompt('New name for this '+el.type,el.name).then(v=>{if(v&&v.trim()){el.name=v.trim();commit();refreshExplorer();}});};r.appendChild(b);});
+};
+})();
+
+/* ---------- animators (parts, GUI, characters) get their own panel at the bottom instead of floating over the world ---------- */
+(function(){const css=document.createElement('style');css.textContent=`
+:where(*):not(#bxgui *):not(#gehand *):not(#joyb *)::before,:where(*):not(#bxgui *):not(#gehand *):not(#joyb *)::after{border-radius:0!important}
+#bxanimdock{position:fixed!important;left:0;right:0;bottom:0;top:auto!important;pointer-events:auto!important;z-index:35;background:var(--pn);border-top:2px solid var(--ln);display:none;flex-direction:column;gap:4px;padding:6px 8px;max-height:46vh;overflow:auto;font-size:12.5px;color:var(--tx)}
+body.bxdocked #bxanimdock{display:flex}body.bxdocked #app{height:calc(100% - var(--dockH,0px))}
+#bxanimdock .stop,#bxanimdock .stime{height:auto!important;min-height:0!important;position:static!important;inset:auto!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;width:auto!important;margin:0!important;border:none!important;background:transparent!important;padding:2px 0!important}
+#bxanimdock .stop{display:flex;flex-wrap:wrap;align-items:center;gap:6px;border-bottom:1px solid var(--ln)!important;padding-bottom:6px!important}
+#bxanimdock .xpop{position:fixed!important}`;document.head.appendChild(css);
+const dock=document.createElement('div');dock.id='bxanimdock';dock.className='studio-ui xa';document.body.appendChild(dock);
+const IDS=['pae','gae','aed'];let owner=null;
+function sync(){const u=IDS.map(i=>document.getElementById(i)).find(Boolean);
+ if(u&&u!==owner){owner=u;dock.innerHTML='';u.querySelectorAll(':scope>.stop,:scope>.stime').forEach(x=>dock.appendChild(x));document.body.classList.add('bxdocked');}
+ if(!u&&owner){owner=null;dock.innerHTML='';document.body.classList.remove('bxdocked');}
+ if(owner){const h=dock.offsetHeight;document.body.style.setProperty('--dockH',h+'px');}}
+new MutationObserver(recs=>{if(recs.every(r=>dock.contains(r.target)))return;sync();}).observe($('view'),{childList:true,subtree:true});
+new ResizeObserver(()=>{if(owner)document.body.style.setProperty('--dockH',dock.offsetHeight+'px');}).observe(dock);
+window.bxAnimDock=dock;})();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
 function init(){if(!load())defaultPlace();lastSnap=snapState();bind();let dv=null;try{dv=localStorage.getItem('buildx-device');}catch(e){}setDevice(dv||(matchMedia('(pointer:coarse)').matches?'mob':'pc'));if(!dv)$('devpick').style.display='flex';applySettings();refreshToolbox();refreshAll();out('👋 Welcome to BuildX! '+Object.keys(CMDS).length+' commands, '+CATALOG.length+' things to insert. Press ▶ Play to test.');startIcons();requestAnimationFrame(frame);}
