@@ -6047,7 +6047,7 @@ init();
 </script>
 <script>
 /* ---- BuildX app: offline + install button ---- */
-if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let done=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!done){done=true;location.reload();}});navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{r.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')r.update().catch(()=>{});});}).catch(()=>{});}
 let __inst=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();__inst=e;const b=document.getElementById('f_install');if(b)b.style.display='';});
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('#f_install');if(!b)return;document.getElementById('filemenu').style.display='none';
  if(__inst){__inst.prompt();__inst.userChoice.finally(()=>{__inst=null;b.style.display='none';});}});
