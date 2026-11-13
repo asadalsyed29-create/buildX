@@ -4773,12 +4773,12 @@ window.bxAlert=m=>dlg(m);window.bxConfirm=m=>dlg(m,{ok:'OK',cancel:'Cancel'});wi
 (function(){
 const PRESETS={
  Low:{scale:0.6,shadows:0,detail:0,view:450,particles:0.3,fps:30},
- Medium:{scale:0.85,shadows:0,detail:1,view:1200,particles:0.6,fps:60},
- High:{scale:1,shadows:0,detail:1,view:3000,particles:1,fps:60},
+ Medium:{scale:0.85,shadows:1,detail:1,view:1200,particles:0.6,fps:60},
+ High:{scale:1,shadows:2,detail:1,view:3000,particles:1,fps:60},
  Ultra:{scale:1.35,shadows:3,detail:1,view:4000,particles:1,fps:0}};
 const isPhone=matchMedia('(pointer:coarse)').matches||innerWidth<760;
 let GX;try{GX=JSON.parse(localStorage.getItem('buildx-gfx')||'null');}catch(e){}
-if(!GX||!GX.preset)GX=Object.assign({preset:isPhone?'Medium':'High'},PRESETS[isPhone?'Medium':'High']);if(!GX.mig2){if(GX.preset!=='Ultra')GX.shadows=0;GX.mig2=1;}
+if(!GX||!GX.preset)GX=Object.assign({preset:isPhone?'Medium':'High'},PRESETS[isPhone?'Medium':'High']);if(!GX.mig3){if(PRESETS[GX.preset])GX.shadows=PRESETS[GX.preset].shadows;GX.mig3=1;}
 const save=()=>{try{localStorage.setItem('buildx-gfx',JSON.stringify(GX));}catch(e){}};
 window.bxGfx=GX;
 
