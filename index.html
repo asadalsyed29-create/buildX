@@ -5769,7 +5769,7 @@ const _k=checkCode;const _k0=src=>_k.call(window,src);checkCode=function(src){co
 const _f=fire;fire=function(P,ev,arg,who){if(P&&P.kind==='part'&&P.handlers&&['on_touch','on_touch_end','on_click'].includes(ev)){const own=namesOf(P);const H=P.handlers;P.handlers=H.filter(h=>!(h.arg&&partNamed(h.arg)&&!own.includes(nrmName(h.arg))));try{_f.apply(this,arguments);}finally{P.handlers=H;}}else _f.apply(this,arguments);if(!G||!P||P.kind!=='part'||!['on_touch','on_touch_end','on_click'].includes(ev))return;const ns=namesOf(P);
  G.scripts.forEach(Q=>{if(Q===P||(P.model&&Q===P.model))return;(Q.handlers||[]).forEach(h=>{if(evOf(h.ev)!==ev||!h.arg||!ns.includes(nrmName(h.arg)))return;
   /* code in a Script has no body of its own, so there "self" means the thing that was touched/clicked */
-  const host=Q.kind==='script'?((P.model&&nrmName(h.arg)!==nrmName(P.o.name))?P.model:P):Q;host.threads=host.threads||[];host.handlers=host.handlers||[];host.signals=host.signals||[];host.funcs=host.funcs||{};if(!G.scripts.includes(host))G.scripts.push(host);host.threads.push(newThread(h.ops,who));});});};
+  const host=(Q.kind==='script'&&!Q.guiEl)?((P.model&&nrmName(h.arg)!==nrmName(P.o.name))?P.model:P):Q;host.threads=host.threads||[];host.handlers=host.handlers||[];host.signals=host.signals||[];host.funcs=host.funcs||{};if(!G.scripts.includes(host))G.scripts.push(host);host.threads.push(newThread(h.ops,who));});});};
 /* a part's own "#on_touch = ItsOwnName" still means itself; other names on a part's code should only run for that other part */
 const _f0=_f;
 /* #visible / #invisible on a GUI thing's own code (or = Gui.Thing) show and hide it */
