@@ -883,7 +883,7 @@ function lexLine(l,ln){l=l.replace(/\s+$/,'');const t=l.trim();if(!t||t.startsWi
  if(name==='when')name='if';rest=rest.replace(/\s*=\s*(except|but)\s*=\s*/gi,' except ');for(let q=0;q<4;q++)rest=rest.replace(/(except [^=]+?)\s*=\s*(and|,)\s*=\s*/i,'$1 and ');
  /* friendly one-line if without # : #if = player_main.touch = kill = player_main */
  if((name==='if'||name==='unless')&&rest&&!/(=|:|\bthen)\s*#/.test(rest)){const T=eqSplit(rest);let at=-1;
-  if(T.length>=2&&condAlone(T[0])&&isCmdTok(T[1]))at=1;else if(T.length>=3&&isCmdTok(T[2]))at=2;
+  if(T.length>=2&&condAlone(T[0])&&isCmdTok(T[1]))at=1;else if(T.length>=3&&(isCmdTok(T[2])||(/^(toucher|touched|who|them|someone|somebody|anyone|anybody|it_player)$/i.test(T[0].trim())&&/^(touch|touches|touching|touched)$/i.test(T[1].trim())&&resolveName(tokName(T[2])))))at=2;
   if(at>0){const act='#'+tokName(T[at])+(T.length>at+1?' = '+T.slice(at+1).join(' = '):'');const sub_=lexLine(act,ln);const cs=T.slice(0,at).join(' = ').trim();if(/^(click|clicks|clicked|tap|tapped|self\.click(ed)?)$/i.test(cs))return {err:`click is an event, not a condition — use on instead of if (line ${ln}). Write: ${act.split(' = ')[0]}${act.includes(' = ')?' = '+act.split(' = ').slice(1).join(' = '):''} = on = click`,ln};if(sub_&&!sub_.err)return {name:'__oneif',neg:name==='unless',loop:false,cond:cs,inner:sub_,ln};}}
  /* a condition used without an if is a mistake: #kill = player_main.touch  -> error (needs if) */
  {const sm=rest.match(/^([a-z0-9_ ]+)\.(touch|touches|touching|touched|click|clicks|clicked|tap|taps|tapped|health|hp|dead|alive)\b/i);if(sm&&!['if','unless','while','until','elseif','set','say','message','title','hint','notify','print','chat','menu','wait_until','wait_while','loop_until','loop_while'].includes(name)&&!/=\s*(if|unless|when|while|until)\s*=/i.test(rest)&&!/^on_|_(if|unless|while|until)$/.test(name)){
@@ -6267,6 +6267,279 @@ const _rp=refreshProps;refreshProps=function(){_rp.apply(this,arguments);const o
  const w=document.createElement('div');w.innerHTML=`<div class="pr"><label>Item</label><div><button class="tb" id="pr_item">${isColl(o)?'Item editor':'Make it an item'}</button></div></div>`;
  const cb=pp.querySelector('#pcode');if(cb)cb.before(...w.childNodes);else pp.append(...w.childNodes);
  $('pr_item').onclick=()=>{if(!isColl(o)){o.code=(o.code?o.code.replace(/\s+$/,'')+'\n':'')+'#collectable';commit();}openHE(o);};};
+})();
+
+/* ================= 29. Assistant: type what you want, it builds and codes it (a free sentence helper + an optional small AI that runs on the phone) ================= */
+(function(){
+/* ---------- words ---------- */
+const NUMW={a:1,an:1,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,fifteen:15,twenty:20,thirty:30,some:5,few:3,'a few':3,several:5,lots:10,'lots of':10,many:10,'a lot of':10,bunch:6,'a bunch of':6};
+const MATW={plastic:'Plastic',smooth:'SmoothPlastic',neon:'Neon',glowing:'Neon',glow:'Neon',glass:'Glass',metal:'Metal',metallic:'Metal',steel:'Metal',iron:'Metal',wood:'Wood',wooden:'Wood',planks:'WoodPlanks',plank:'WoodPlanks',brick:'Brick',concrete:'Concrete',grass:'Grass',grassy:'Grass',sand:'Sand',sandy:'Sand',ice:'Ice',icy:'Ice',marble:'Marble',granite:'Granite',slate:'Slate',stone:'Slate',diamondplate:'DiamondPlate',cobblestone:'Cobblestone',cobble:'Cobblestone',fabric:'Fabric',cloth:'Fabric',foil:'Foil',gold:'Foil',golden:'Foil',rusty:'CorrodedMetal',rust:'CorrodedMetal',snow:'Snow',snowy:'Snow',forcefield:'ForceField',pebble:'Pebble',rock:'Rock',rocky:'Rock',carpet:'Carpet',tiles:'CeramicTiles',tile:'CeramicTiles',leather:'Leather',lava:'Lava',grid:'Grid',studs:'Studs'};
+const MATCOL={Grass:'#4c9a3f',Sand:'#d9c38f',Wood:'#8a5a33',WoodPlanks:'#9b6b3f',Brick:'#9c4a37',Snow:'#f2f5f8',Ice:'#bfe3f2',Lava:'#ff5a1f',Foil:'#f2c230',Marble:'#e8e6e1',Slate:'#5f6670',Rock:'#77736d',Cobblestone:'#7d7a74',CorrodedMetal:'#7a5a44',Metal:'#a7adb5',Concrete:'#9a9a9a',Glass:'#bfe3f2',DiamondPlate:'#a8adb3'};
+const SIZEW={tiny:0.35,little:0.6,small:0.6,mini:0.45,big:2,large:2,huge:3.5,giant:5,massive:6,enormous:6,gigantic:6};
+const P=(sh,size,col,mat,code,extra)=>({sh,size,col,mat,code:code||'',extra:extra||{}});
+const C={kill:'#if = toucher = touch = kill = toucher',damage:n=>`#if = toucher = touch = damage = toucher : ${n||25}`,heal:n=>`#if = toucher = touch = heal = toucher : ${n||50}`,bounce:'#if = toucher = touch = bounce = toucher : 120',
+ speed:'#if = toucher = touch = speed = toucher : 40',freeze:'#if = toucher = touch = freeze = toucher : 3s',check:'#if = toucher = touch = checkpoint = toucher',win:'#if = toucher = touch = win = toucher',
+ coin:'#if = toucher = touch = coin = toucher : 1\n#line1 = next = delete = self',fallstep:'#if = touch = wait = 0.6s\n#line1 = next = delete = self',tele:'#if = toucher = touch = teleport = toucher : 0,10,0'};
+/* things you can add: words -> what gets made */
+const THINGS=[
+ [['kill brick','killbrick','kill part','kill block','death brick','trap'],()=>P('Block',[6,1,6],'#d32f2f','Neon',C.kill,{name:'Kill brick'})],
+ [['lava floor','lava pool','lava'],()=>P('Block',[16,0.6,16],'#ff5a1f','Lava',C.kill,{name:'Lava'})],
+ [['water','pool','lake'],()=>P('Block',[16,4,16],'#2f7fd8','Glass','#water',{Transparency:0.4,CanCollide:false,name:'Water'})],
+ [['ice floor','ice'],()=>P('Block',[16,0.6,16],'#bfe3f2','Ice','#ice',{name:'Ice'})],
+ [['coins','coin'],()=>P('Cylinder',[0.35,2.4,2.4],'#f2c230','Foil',C.coin+'\n#spin = 90',{CanCollide:false,y:3,name:'Coin'})],
+ [['checkpoint'],()=>P('Block',[6,0.4,6],'#3d8bff','Neon',C.check,{name:'Checkpoint'})],
+ [['spawn point','spawn location','spawn','spawnpoint'],()=>P('Block',[8,0.4,8],'#d9d9d9','Plastic','',{Spawn:true,name:'SpawnLocation'})],
+ [['win pad','finish line','finish pad','finish','goal','win part','end pad','winpad'],()=>P('Block',[8,0.4,8],'#2ecc40','Neon',C.win,{name:'Finish'})],
+ [['jump pad','bounce pad','trampoline','launch pad','launcher'],()=>P('Block',[6,0.6,6],'#7cfc00','Neon',C.bounce,{name:'Jump pad'})],
+ [['speed pad','speed boost','boost pad'],()=>P('Block',[6,0.4,6],'#ffd23f','Neon',C.speed,{name:'Speed pad'})],
+ [['heal pad','healing pad','health pad'],()=>P('Block',[6,0.4,6],'#ff6b9a','Neon',C.heal(50),{name:'Heal pad'})],
+ [['teleporter','teleport pad','teleport'],()=>P('Block',[6,0.4,6],'#8e44ff','Neon',C.tele,{name:'Teleporter'})],
+ [['falling step','falling platform','fake floor'],()=>P('Block',[6,1,6],'#c9a26b','WoodPlanks',C.fallstep,{name:'Falling step'})],
+ [['moving platform'],()=>P('Block',[8,1,8],'#5b6cff','Plastic','#patrol = 10,0,0 : 2s',{name:'Moving platform'})],
+ [['conveyor','conveyor belt'],()=>P('Block',[16,1,6],'#2a2b31','DiamondPlate','#conveyor = 20',{name:'Conveyor'})],
+ [['ladder'],()=>P('Block',[3,14,1],'#8a5a33','WoodPlanks','#ladder',{name:'Ladder'})],
+ [['seat','chair','bench'],()=>P('Block',[3,1.5,3],'#7a4a2a','Wood','#seat',{name:'Seat'})],
+ [['lamp','light','lantern'],()=>P('Ball',[1.6,1.6,1.6],'#ffe9a8','Neon','#light = 20',{y:6,name:'Light'})],
+ [['campfire','fire'],()=>P('Block',[3,0.8,3],'#5a3a22','Wood','#fire',{name:'Campfire'})],
+ [['floor','ground','baseplate'],()=>P('Block',[40,1,40],'#7f8a7a','Grass','',{name:'Floor'})],
+ [['platform','plate','slab'],()=>P('Block',[10,1,10],'#9aa1a8','Concrete','',{name:'Platform'})],
+ [['wall'],()=>P('Block',[20,10,1],'#9c4a37','Brick','',{name:'Wall'})],
+ [['door'],()=>P('Block',[6,10,1],'#8a5a33','Wood','',{name:'Door'})],
+ [['pillar','column','pole','post'],()=>P('Cylinder',[12,2,2],'#d9d6cf','Marble','',{Orientation:[0,0,90],name:'Pillar'})],
+ [['ramp','wedge','slope'],()=>P('Wedge',[6,4,10],'#9aa1a8','Concrete','',{name:'Ramp'})],
+ [['cone','spike'],()=>P('Cone',[3,4,3],'#d9d9d9','Metal','',{name:'Cone'})],
+ [['ball','sphere','orb','marble'],()=>P('Ball',[3,3,3],'#5b6cff','SmoothPlastic','',{name:'Ball'})],
+ [['cylinder','barrel','tube'],()=>P('Cylinder',[4,3,3],'#7f8c8d','Metal','',{Orientation:[0,0,90],name:'Cylinder'})],
+ [['crate'],()=>P('Block',[4,4,4],'#a8743f','WoodPlanks','',{name:'Crate'})],
+ [['cube','box'],()=>P('Block',[4,4,4],'#a3a2a5','SmoothPlastic','',{name:'Cube'})],
+ [['gem','diamond','crystal'],()=>P('Gem',[2,1.6,2],'#7fd3ff','Glass','#collectable\n#spin = 90\n#bob = 0.4',{Transparency:0.1,Reflectance:0.25,y:3,name:'Gem'})],
+ [['heart'],()=>P('Heart',[2,2,0.8],'#e0263f','SmoothPlastic','',{y:3,name:'Heart'})],
+ [['part','block','brick','thing','object'],()=>P('Block',[4,1.2,2],'#a3a2a5','Plastic','',{name:'Part'})]];
+const SPECIAL={tree:1,trees:1,stairs:1,staircase:1,steps:1,bot:1,bots:1,npc:1,npcs:1,dummy:1,leaderboard:1,countdown:1,music:1};
+/* ---------- abilities: words in a sentence -> code ---------- */
+function abilities(t,o){const L=[],props={},notes=[];let needKey=null;const clicked=/\b(click|clicked|tap|tapped|press|pressed)\b/.test(t);const num=(re,d)=>{const m=t.match(re);return m?+m[1]:d;};
+ if(/\b(kills?|deadly|killing|kill you|death)\b/.test(t)){L.push(C.kill);notes.push('kills on touch');}
+ else if(/\b(hurts?|damages?|damaging)\b/.test(t)){const n=num(/(\d+)\s*(damage|health|hp)/,25);L.push(C.damage(n));notes.push('hurts '+n+' on touch');}
+ if(/\b(heals?|healing)\b/.test(t)&&!/\bheal pad\b/.test(t)){const n=num(/(\d+)\s*(health|hp)/,50);L.push(C.heal(n));notes.push('heals '+n);}
+ if(/\b(bouncy|bounces?|launch(es)?|jump pad|bounce you)\b/.test(t))L.push(C.bounce);
+ if(/\b(makes? you (fast|faster|quick)|speeds? you up)\b/.test(t))L.push(C.speed);
+ if(/\b(freezes?|frozen)\b/.test(t))L.push(C.freeze);
+ if(/\b(checkpoint)\b/.test(t)&&!o.isCheck)L.push(C.check);
+ if(/\b(wins?|winning)\b/.test(t)&&!o.isWin)L.push(C.win);
+ if(/\bgives? (you )?(a )?coins?\b/.test(t))L.push(C.coin);
+ if(/\b(spins?|spinning|rotates?|rotating|turns? around)\b/.test(t)&&!/\bstop/.test(t)){const f=/\b(fast|quick|quickly|crazy)\b/.test(t)?360:/\bslow(ly)?\b/.test(t)?30:90;L.push('#spin = '+f);notes.push('spins');}
+ if(/\b(floats?|floating|hovers?|hovering|bobs?|bobbing)\b/.test(t)){L.push('#bob = 1');notes.push('floats');}
+ if(/\b(moves?|moving|slides?|back and forth|patrols?)\b/.test(t)&&!/\bmove (it|this)\b/.test(t)){const up=/\bup and down\b/.test(t);L.push(up?'#patrol = 0,8,0 : 2s':'#patrol = 10,0,0 : 2s');notes.push('moves');}
+ if(/\b(swings?|swinging)\b/.test(t))L.push('#swing = 45');
+ if(/\b(chases?|chasing|hunts?)\b/.test(t))L.push('#chase_player = 14');
+ else if(/\b(follows?|following)\b/.test(t))L.push('#follow_player = 10');
+ if(/\b(falls?|falling|drops?|physics|gravity|unanchored)\b/.test(t)&&!/\bfalling step\b/.test(t))L.push('#physics');
+ if(/\b(explodes?|exploding|blows? up|boom)\b/.test(t))L.push(clicked?'#on = click = explode':'#if = touch = explode');
+ if(/\b(disappears?|vanish(es)?|goes away|deletes? itself|breaks?)\b/.test(t)&&!/\bfalling\b/.test(t))L.push(clicked?'#on = click = delete = self':'#if = touch = delete = self');
+ {const m=t.match(/\b(?:turns?|changes?)\s+(?:into\s+|to\s+)?([a-z ]+?)\s+when\s+(?:you\s+)?(?:click|tap|touch)/);if(m){const c=colorIn(m[1]);if(c)L.push(clicked?`#on = click = color = ${c.word}`:`#if = touch = color = ${c.word}`);}}
+ if(/\b(sparkles?|sparkly|sparkling)\b/.test(t))L.push('#sparkles');
+ if(/\b(on fire|burning|flames?)\b/.test(t))L.push('#fire');
+ if(/\b(smokes?|smoking|smoky)\b/.test(t))L.push('#smoke');
+ if(/\b(gives? light|lights? up|shines?|glows? light)\b/.test(t))L.push('#light = 20');
+ if(/\b(confetti)\b/.test(t))L.push('#if = touch = confetti');
+ if(/\b(collect|collectable|collectible|pick (it )?up|picked up)\b/.test(t)){L.push('#collectable');notes.push('can be collected');}
+ {const m=t.match(/\b(?:saying|says?|shows?(?: the)? message|message)\s+["“']?([^"”']+?)["”']?\s*(?:when (?:you )?(?:touch|touched|click|clicked|tap|tapped)(?: it)?)?\s*$/);if(m&&!/\bwelcome\b/.test(t)){const words=keepCase(m[1].replace(/^(that )?/,''));L.push(clicked?`#on = click = message = ${words}`:`#if = touch = message = ${words}`);}}
+ {const m=t.match(/\bopens? (?:with|when (?:i|you) (?:have|get|hold)|using) (?:the |a |an )?([a-z0-9 ]+?)(?:\s*$|\s+(?:and|that|which)\b)/);if(m){const k=m[1].trim();L.push(`#if = player_main = has ${k} = then = delete = self`);notes.push('opens when you have the '+k);needKey=k;}}
+ if(/\b(invisible|hidden)\b/.test(t)&&!/\bturns? invisible\b/.test(t))props.Transparency=1;
+ else if(/\b(see[- ]through|transparent|clear)\b/.test(t))props.Transparency=0.5;
+ if(/\b(walk through|no collide|not solid|can'?t touch it|ghost)\b/.test(t))props.CanCollide=false;
+ if(/\b(water)\b/.test(t)&&!o.isWater)L.push('#water');
+ if(/\b(slippery)\b/.test(t))L.push('#ice');
+ if(/\b(climb|climbable)\b/.test(t))L.push('#ladder');
+ if(/\b(sit|sit on)\b/.test(t))L.push('#seat');
+ return {L,props,notes,needKey};}
+function colorIn(t){const w=t.toLowerCase().replace(/[^a-z ]/g,' ').split(/\s+/).filter(Boolean);for(let n=3;n>=1;n--)for(let i=0;i+n<=w.length;i++){const k=w.slice(i,i+n).join('');if(COLORS[k]&&!(n===1&&['gold','lava','snow','sand','tan','coral','ivory','pearl','mint','moss','navy','olive','plum','silver','salmon','wheat','linen','orchid','snow','teal'].includes(k)&&MATW[k]&&false))return {hex:COLORS[k],word:w.slice(i,i+n).join(' ')};}return null;}
+let RAW='';const keepCase=w=>{const i=RAW.toLowerCase().indexOf(w.toLowerCase());return i>=0?RAW.substr(i,w.length):w;};
+const numIn=t=>{const m=t.match(/\b(\d+)\b/);if(m)return +m[1];for(const [k,v] of Object.entries(NUMW).sort((a,b)=>b[0].length-a[0].length))if(new RegExp('\\b'+k+'\\b').test(t))return v;return 1;};
+/* ---------- where things go ---------- */
+let placed=0;
+function spot(size,y,i,n){let t=cam.tgt;if(document.body.classList.contains('aiopen')){/* the panel covers the right side: put things in the part of the view you can see */const eye=camEye();const fw=norm(sub(cam.tgt,eye));const rt=norm(cross(fw,[0,1,0]));const d=len(sub(cam.tgt,eye));t=add(t,mul(rt,-d*0.28));}const base=[Math.round(t[0]),0,Math.round(t[2])];let off=[0,0,0];
+ if(n>1){const r=Math.max(6,Math.sqrt(n)*4);const a=i/n*Math.PI*2+Math.random()*0.4;const d=r*(0.45+Math.random()*0.55);off=[Math.round(Math.cos(a)*d),0,Math.round(Math.sin(a)*d)];}
+ else if(placed){off=[((placed%3)-1)*Math.max(4,size[0]+2),0,Math.floor(placed/3)*Math.max(4,size[2]+2)];}
+ return [base[0]+off[0],y!=null?y:size[1]/2,base[2]+off[2]];}
+const scaleSize=(s,t)=>{let k=1;for(const [w,v] of Object.entries(SIZEW))if(new RegExp('\\b'+w+'\\b').test(t))k=v;let z=s.map(v=>Math.round(v*k*100)/100);
+ if(/\b(tall|high)\b/.test(t))z[1]=Math.round(z[1]*3*100)/100;if(/\blong\b/.test(t))z[2]=Math.round(z[2]*3*100)/100;if(/\bwide\b/.test(t))z[0]=Math.round(z[0]*3*100)/100;if(/\b(thin|flat)\b/.test(t))z[1]=Math.max(0.2,Math.round(z[1]*0.3*100)/100);return z;};
+const matIn=t=>{for(const [w,m] of Object.entries(MATW))if(new RegExp('\\b'+w+'\\b').test(t))return m;return null;};
+function addCode(o,code){if(!code)return;const have=(o.code||'').split('\n').map(s=>s.trim());const add=code.split('\n').filter(l=>l.trim()&&!have.includes(l.trim()));if(add.length)o.code=(o.code?o.code.replace(/\s+$/,'')+'\n':'')+add.join('\n');}
+const uniq=n=>{let k=n,i=2;while(S.items.some(o=>o.name===k))k=n+i++;return k;};
+const findObj=name=>{const k=nrmName(name);return S.items.find(o=>(o.cls==='Part'||o.cls==='Model'||o.cls==='Bot'||o.cls==='Script')&&nrmName(o.name)===k);};
+const selObj=()=>{const id=sel[0];return typeof id==='number'?byId(id):null;};
+
+/* ---------- the sentence helper ---------- */
+function doAdd(t,out){/* t: the words after add/make/... */
+ const n=Math.min(40,numIn(t));
+ const tpl=(window.bxItemTemplates||[]).filter(x=>!x.hide&&(x.n!=='Coin'||/\bitem\b/.test(t))).find(x=>new RegExp('\\b'+x.n.toLowerCase().replace(/ /g,'\\s+')+'s?\\b').test(t))||(/\b(potion)\b/.test(t)?{n:'Health Potion'}:null)||(/\b(sword|blade)\b/.test(t)?{n:'Sword'}:null);
+ if(tpl&&!/\b(door)\b/.test(t)&&window.bxNewItem){const ids=[];for(let i=0;i<Math.min(n,10);i++){const n0=S.items.length;bxNewItem(tpl.n);const it=S.items.slice(n0).find(o=>o.parent==='Workspace');if(it){const sp=spot(it.props.Size,null,i,n);it.props.Position=[sp[0],it.props.Position[1],sp[2]];ids.push(it.id);}}if(ids.length)sel=ids;placed++;out.push(`Added ${n>1?n+' ':''}${tpl.n}${n>1?'s':''} (an item you can pick up and use).`);return true;}
+ if(/\btrees?\b/.test(t))return addTree(t,n,out);
+ if(/\b(stairs|staircase|steps)\b/.test(t))return addStairs(t,out);
+ if(/\b(bots?|npcs?|dummy|dummies)\b/.test(t)){const ids=[];for(let i=0;i<Math.min(n,10);i++){const b=mk('Bot',uniq('Bot'),{Position:spot([3,5,3],3,i,n)});const ab=abilities(t,{});addCode(b,ab.L.filter(l=>/chase|follow|patrol|spin/.test(l)).join('\n'));S.items.push(b);ids.push(b.id);}sel=ids;out.push(`Added ${n>1?n+' bots':'a bot'}.`);return true;}
+ if(/\bleaderboard\b/.test(t)){addScript('Leaderboard','#leaderboard');out.push('Added a leaderboard.');return true;}
+ if(/\bcountdown\b/.test(t)){const k=(t.match(/(\d+)/)||[0,10])[1];addScript('Countdown','#countdown = '+k);out.push('Added a countdown from '+k+'.');return true;}
+ if(/\bmusic\b/.test(t)){addScript('Music','#sound_music');out.push('Added music.');return true;}
+ {const m=t.match(/\b(?:welcome )?message (?:that )?(?:saying|says?)?\s*["“']?(.+?)["”']?\s*$/);if(m&&/\b(welcome|start|message)\b/.test(t)&&!/\b(when|touch|click)\b/.test(t)){addScript('Welcome','#message = '+keepCase(m[1]));out.push('Added a start message.');return true;}}
+ const tc=t.replace(/\b(?:opens?|says?|saying|called)\b.*$/,' ');/* the words that describe the thing (not what it does) */
+ let head=tc.split(/\b(?:that|which|who|with|when|where|so)\b/)[0];const hc=colorIn(head);if(hc)head=head.replace(new RegExp('\\b'+hc.word+'\\b'),' ');
+ head=head.replace(/\b(on fire|burning|glowing|spinning|floating|moving|deadly|bouncy|sparkly|invisible|see-through|transparent|falling|rotating|hovering)\b/g,' ');
+ let def=null,hit='',best=null;THINGS.forEach(([ws,f],ti)=>ws.forEach(w=>{const m=new RegExp('\\b'+w+'(?:s|es)?\\b').exec(head);if(!m)return;const end=m.index+w.length;if(!best||end>best.end||(end===best.end&&w.length>best.w.length))best={end,w,f};}));
+ if(!best)THINGS.forEach(([ws,f])=>ws.forEach(w=>{if(!best&&new RegExp('\\b'+w+'(?:s|es)?\\b').test(tc))best={w,f};}));
+ if(best){def=best.f();hit=best.w;}
+ if(!def)return false;
+ const ab=abilities(t.replace(new RegExp('\\b'+hit+'\\b'),' '),{isCheck:hit==='checkpoint',isWin:def.code===C.win,isWater:def.code==='#water'});
+ const col=colorIn(tc.replace(/\b(gold coins?|golden)\b/,' '));const mat=matIn(tc.split(/\b(?:that|which|who|when)\b/)[0].replace(new RegExp('\\b'+hit+'\\b'),' '));let size=scaleSize(def.size,t);if((def.extra.Orientation||[])[2]===90&&/\b(tall|high|long)\b/.test(t)){const z=scaleSize(def.size,t.replace(/\b(tall|high|long)\b/g,' '));z[0]=Math.round(z[0]*2.5*100)/100;size=z;}
+ const ex=Object.assign({},def.extra);const nm=ex.name||'Part';delete ex.name;const yv=ex.y;delete ex.y;
+ const ids=[];for(let i=0;i<n;i++){const props=Object.assign({Shape:def.sh,Size:size.slice(),Color:col?col.hex:(mat&&MATCOL[mat])||def.col,Material:mat||def.mat,Anchored:true},ex,ab.props);
+  props.Position=spot(size,yv!=null?yv+size[1]/2-0.5:null,i,n);if(def.sh==='Cylinder'&&(ex.Orientation||[])[2]===90)props.Position[1]=yv!=null?yv:size[0]/2;
+  if(/\bfloor|ground|baseplate|lava|water|ice|pad|checkpoint|spawn|finish|goal|plate|slab|conveyor\b/.test(hit))props.Position[1]=hit==='water'?size[1]/2:size[1]/2;
+  const o=mk('Part',uniq(nameFrom(t,nm,col,mat)),props,'Workspace','');addCode(o,def.code);addCode(o,ab.L.join('\n'));S.items.push(o);ids.push(o.id);}
+ if(ab.needKey&&!S.items.some(o=>o.cls==='Part'&&nrmName(o.name)===nrmName(ab.needKey))&&window.bxNewItem&&/\bkey\b/.test(ab.needKey)){const before=S.items.length;bxNewItem('Key');const k=S.items[before];if(k&&ab.needKey!=='key'){k.name=ab.needKey.replace(/\b\w/g,c=>c.toUpperCase());}out.push('Added a key to find, too.');}
+ placed++;sel=ids;const what=byId(ids[0]).name.replace(/\d+$/,'');
+ const nts=[...(def.code?[describe(def.code)]:[]),...ab.notes].filter((x,i,a)=>x&&a.indexOf(x)===i);out.push(`Added ${n>1?n+' × ':''}${what}${nts.length?' ('+nts.join(', ')+')':''}.`);return true;}
+function nameFrom(t,nm,col,mat){if(/\bcalled\s+([a-z0-9 ]+?)(\s+(that|which|and)\b|$)/.test(t)){const m=t.match(/\bcalled\s+([a-z0-9 ]+?)(\s+(that|which|and)\b|$)/);return m[1].replace(/\b\w/g,c=>c.toUpperCase());}return nm;}
+const describe=c=>c===C.kill?'kills on touch':c===C.check?'checkpoint':c===C.win?'wins the game':c===C.bounce?'bounces you':c===C.speed?'speed boost':c.startsWith('#if = toucher = touch = coin')?'gives a coin':c==='#water'?'you can swim':c==='#ladder'?'you can climb':c==='#seat'?'you can sit':'';
+function addScript(name,code){const s=mk('Script',uniq(name),{},'Scripts',code);S.items.push(s);sel=[s.id];}
+function addTree(t,n,out){const ids=[];for(let i=0;i<Math.min(n,20);i++){const k=Math.round((/\b(big|tall|huge)\b/.test(t)?1.6:/\b(small|little)\b/.test(t)?0.6:1)*(0.85+Math.random()*0.3)*100)/100;const p=spot([6,10,6],0,i,n);
+  const m=mk('Model',uniq('Tree'),{},'Workspace','');S.items.push(m);
+  const tr=mk('Part','Trunk',{Shape:'Cylinder',Size:[8*k,1.6*k,1.6*k],Orientation:[0,0,90],Position:[p[0],4*k,p[2]],Color:'#6b4426',Material:'Wood',Anchored:true},m.id,'');
+  const lv=mk('Part','Leaves',{Shape:'Ball',Size:[7*k,6*k,7*k],Position:[p[0],9.5*k,p[2]],Color:/\b(autumn|orange|fall)\b/.test(t)?'#d9822b':/\b(snowy|winter)\b/.test(t)?'#e8eef2':'#3f8f3a',Material:/\b(snowy|winter)\b/.test(t)?'Snow':'Grass',Anchored:true},m.id,'');
+  S.items.push(tr,lv);ids.push(m.id);}sel=ids;out.push(`Added ${ids.length>1?ids.length+' trees':'a tree'}.`);return true;}
+function addStairs(t,out){const n=Math.max(3,Math.min(30,(t.match(/(\d+)/)||[0,8])[1]|0||8));const p=spot([6,1,2],0,0,1);const col=colorIn(t);const mat=matIn(t)||'Concrete';
+ const m=mk('Model',uniq('Stairs'),{},'Workspace','');S.items.push(m);for(let i=0;i<n;i++)S.items.push(mk('Part','Step '+(i+1),{Shape:'Block',Size:[6,1,2],Position:[p[0],0.5+i,p[2]+i*2],Color:col?col.hex:(MATCOL[mat]||'#9aa1a8'),Material:mat,Anchored:true},m.id,''));
+ placed++;sel=[m.id];out.push(`Added stairs with ${n} steps.`);return true;}
+function doEdit(o,t,out){if(!o){out.push('Pick a part first (tap it), then tell me what to change.');return true;}const P2=o.props||{};const did=[];
+ if(/\b(delete|remove|destroy|get rid of)\b/.test(t)&&!/\b(code|script)\b/.test(t)){S.items=S.items.filter(x=>x.id!==o.id&&!descendants(o.id).some(d=>d.id===x.id));sel=[];out.push('Deleted '+o.name+'.');return true;}
+ if(/\b(copy|duplicate|clone)\b/.test(t)){const n=Math.min(20,numIn(t.replace(/\bcopy\b/,'')));for(let i=0;i<n;i++){const c=JSON.parse(JSON.stringify(o));c.id=nextId++;c.name=uniq(o.name);if(c.props&&c.props.Position)c.props.Position=[c.props.Position[0]+(i+1)*(c.props.Size?c.props.Size[0]+1:4),c.props.Position[1],c.props.Position[2]];S.items.push(c);}out.push(`Made ${n} cop${n>1?'ies':'y'} of ${o.name}.`);return true;}
+ {const m=t.match(/\b(?:name|call|rename)\s+(?:it|this)?\s*(?:to\s+)?["“']?([a-z0-9 ]+?)["”']?\s*$/);if(m&&/\b(name|call|rename)\b/.test(t)){o.name=m[1].trim().replace(/\b\w/g,c=>c.toUpperCase());out.push('Renamed it to '+o.name+'.');return true;}}
+ if(o.cls==='Part'){
+  const col=colorIn(t.replace(/\bwhen\b.*$/,''));if(col&&!/\bturns?\b.*\bwhen\b/.test(t)){P2.Color=col.hex;did.push(col.word);}
+  const mat=matIn(t.replace(/\bwhen\b.*$/,''));if(mat){P2.Material=mat;did.push(mat==='Neon'?'glowing':mat.toLowerCase());}
+  let k=null;if(/\b(bigger|larger|grow)\b/.test(t))k=/\bmuch|way|a lot\b/.test(t)?2.5:1.5;if(/\b(smaller|shrink|tinier)\b/.test(t))k=/\bmuch|way|a lot\b/.test(t)?0.4:0.67;
+  {const m=t.match(/\b(\d+(?:\.\d+)?)\s*(?:times|x)\s*(bigger|larger|smaller)?/);if(m&&/\b(bigger|larger|smaller|size)\b/.test(t))k=/smaller/.test(t)?1/+m[1]:+m[1];}
+  if(k){P2.Size=P2.Size.map(v=>Math.round(v*k*100)/100);did.push(k>1?'bigger':'smaller');}
+  if(/\btaller\b/.test(t)){P2.Size[1]=Math.round(P2.Size[1]*1.5*100)/100;did.push('taller');}if(/\bshorter\b/.test(t)){P2.Size[1]=Math.round(P2.Size[1]/1.5*100)/100;did.push('shorter');}
+  if(/\bwider\b/.test(t)){P2.Size[0]=Math.round(P2.Size[0]*1.5*100)/100;did.push('wider');}if(/\blonger\b/.test(t)){P2.Size[2]=Math.round(P2.Size[2]*1.5*100)/100;did.push('longer');}
+  if(/\b(visible|solid|normal)\b/.test(t)&&!/\binvisible\b/.test(t)){P2.Transparency=0;did.push('visible');}
+  {const m=t.match(/\bmove (?:it|this)?\s*(up|down|left|right|forward|forwards|back|backwards|away|closer)\s*(\d+(?:\.\d+)?)?/);if(m){const d=+(m[2]||4);const v={up:[0,d,0],down:[0,-d,0],left:[-d,0,0],right:[d,0,0],forward:[0,0,d],forwards:[0,0,d],back:[0,0,-d],backwards:[0,0,-d],away:[0,0,d],closer:[0,0,-d]}[m[1]];P2.Position=P2.Position.map((x,i)=>Math.round((x+v[i])*100)/100);did.push('moved '+m[1]);}}
+  {const m=t.match(/\b(?:turn|rotate)\s+(?:it|this)?\s*(?:by\s+)?(\d+)?\s*(?:degrees?)?/);if(m&&/\b(turn|rotate)\b/.test(t)&&!/\bturns? (into|to)\b/.test(t)){const d=+(m[1]||90);P2.Orientation=[P2.Orientation[0],(P2.Orientation[1]+d)%360,P2.Orientation[2]];did.push('turned '+d+'°');}}
+  if(/\b(anchor|anchored|stay still|not fall)\b/.test(t)){P2.Anchored=true;did.push('anchored');}
+  if(/\b(solid|collide)\b/.test(t)&&!/\bnot\b/.test(t))P2.CanCollide=true;}
+ if(/\b(stop|no more|remove the|without)\b/.test(t)&&/\b(spin|spinning|moving|floating|bob|code|script|kill|killing)\b/.test(t)){const rm=/\bcode|script\b/.test(t)?()=>true:/\bspin/.test(t)?l=>/#spin/.test(l):/\bmov/.test(t)?l=>/#patrol|#swing/.test(l):/\b(float|bob)/.test(t)?l=>/#bob/.test(l):l=>/= kill =/.test(l);o.code=(o.code||'').split('\n').filter(l=>!rm(l)).join('\n');did.push('removed that code');}
+ else{const ab=abilities(t,{});if(ab.L.length){addCode(o,ab.L.join('\n'));did.push(...(ab.notes.length?ab.notes:['added code']));}if(o.cls==='Part')Object.assign(P2,ab.props);if(Object.keys(ab.props).length)did.push(ab.props.Transparency===1?'invisible':ab.props.Transparency?'see-through':ab.props.CanCollide===false?'walk-through':'');}
+ if(!did.filter(Boolean).length)return false;out.push(`Changed ${o.name}: ${did.filter(Boolean).join(', ')}.`);return true;}
+function doWorld(t,out){const L=S.lighting||(S.lighting={});
+ if(/\b(night|nighttime|midnight|dark)\b/.test(t)){L.ClockTime=0;out.push('It\'s night now.');return true;}
+ if(/\b(sunset|evening|dusk)\b/.test(t)){L.ClockTime=18;out.push('It\'s sunset now.');return true;}
+ if(/\b(sunrise|dawn)\b/.test(t)){L.ClockTime=6.5;out.push('It\'s sunrise now.');return true;}
+ if(/\b(day|daytime|morning|noon|bright|light)\b/.test(t)&&/\b(make it|set|turn it|change)\b/.test(t)){L.ClockTime=/\bmorning\b/.test(t)?9:14;out.push('It\'s day now.');return true;}
+ if(/\b(fog|foggy|misty)\b/.test(t)){if(/\b(no|remove|without|less)\b/.test(t)){L.FogStart=300;L.FogEnd=1400;out.push('Fog cleared.');}else{L.FogStart=20;L.FogEnd=160;out.push('Added fog.');}return true;}
+ return false;}
+/* one sentence -> actions; returns false if it didn't understand */
+function sentence(raw,out){RAW=raw;let t=' '+raw.toLowerCase().replace(/[“”]/g,'"').replace(/[^a-z0-9 ",.:'#%=-]/g,' ').replace(/\s+/g,' ').trim()+' ';t=t.trim();
+ if(!t)return true;
+ if(/^#/.test(raw.trim())){const o=selObj()||lastAdded();if(!o){out.push('Pick a part first, then I can add that code to it.');return true;}const bad=badCode(raw.trim());if(bad){out.push('That code has a problem: '+bad);return true;}addCode(o,raw.trim());out.push('Added the code to '+o.name+'.');return true;}
+ if(/\b(it|this|that|the selected( part)?)\b/.test(t)&&/^(please )?(make|turn|set|change|paint|color|colour|delete|remove|destroy|get rid of|copy|duplicate|clone|move|rotate|name|call|rename|stop|let|give)\b/.test(t)&&!/^(make|add|create|build) (a|an|\d+|some|one|two|three|four|five|ten|lots|many|few)\b/.test(t)){
+  if(/\b(night|sunset|sunrise|day|fog|foggy|dark)\b/.test(t)&&/\bmake it\b/.test(t)&&!/\bmake it (glow|dark (red|blue|green))/.test(t)&&doWorld(t,out))return true;return doEdit(selObj(),t,out);}
+ if(/^(stop|no more|don'?t)\b/.test(t)&&selObj())return doEdit(selObj(),t,out);
+ if(doWorld(t,out))return true;
+ {const m=t.match(/^(?:make|turn|set|change|paint|delete|remove)\s+(?:the\s+)?([a-z0-9 ]+?)\s+(.*)$/);if(m){const o=findObj(m[1])||findObj(m[1].replace(/s$/,''));if(o){sel=[o.id];return doEdit(o,t.replace(m[1],'it'),out);}}}
+ {const m=t.match(/^(?:please |can you |could you |i want |i need |give me |put |place |add |make |create |build |spawn |there should be )+(.*)$/);if(m)return doAdd(m[1],out);}
+ return doAdd(t,out)||false;}
+function lastAdded(){const id=sel[0];return typeof id==='number'?byId(id):null;}
+function badCode(code){try{const r=(checkCode(code).res||[]).filter(x=>x.lvl&&x.lvl!=='ok'&&x.lvl!=='warn');return r.length?r[0].msg:'';}catch(e){return '';}}
+function helper(text,out){placed=0;const parts=text.split(/\n+|(?<=[a-z0-9"'])[.!?;]+\s+|\s+(?:and then|then|also)\s+/i).map(s=>s.trim()).filter(Boolean);const miss=[];
+ parts.forEach(p=>{if(/^#/.test(p)){sentence(p,out);return;}
+  /* "a red ball and a blue cube" -> two adds */const adds=p.match(/^(?:please )?(?:add|make|create|build|spawn|place|put)\s+(.*)$/i);
+  if(adds&&/\s+and\s+(a|an|\d+|some|one|two|three|four|five|ten)\s+/.test(adds[1])&&!/\b(that|which)\b[^,]*\band\b/.test(adds[1])){adds[1].split(/\s+and\s+(?=(?:a|an|\d+|some|one|two|three|four|five|ten)\s+)/).forEach(q=>{if(!sentence('add '+q,out))miss.push(q);});return;}
+  if(!sentence(p,out))miss.push(p);});return miss;}
+window.bxHelper=(text)=>{const out=[];const miss=helper(text,out);return {out,miss};};
+
+/* ---------- the small AI (runs on the phone, downloaded once) ---------- */
+const MODEL='onnx-community/Qwen2.5-0.5B-Instruct',LIB='https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.6';
+let ai={state:'off',gen:null,T:null,pct:0,err:''};const store=()=>{try{return JSON.parse(localStorage.getItem('bxai')||'{}');}catch(e){return {};}};const save=v=>{try{localStorage.setItem('bxai',JSON.stringify(Object.assign(store(),v)));}catch(e){}};
+async function loadAI(){if(ai.gen)return ai.gen;if(ai.loading)return ai.loading;ai.state='loading';ai.pct=0;ai.err='';ui();
+ ai.loading=(async()=>{const T=await import(LIB);ai.T=T;T.env.allowLocalModels=false;try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
+  const files={};const prog=p=>{if(p&&p.status==='progress'&&p.file){files[p.file]=[p.loaded||0,p.total||0];let a=0,b=0;Object.values(files).forEach(([x,y])=>{a+=x;b+=y;});ai.pct=b?Math.round(a/b*100):0;ai.mb=Math.round(b/1048576);ui();}};
+  let tries=[];let f16=false;if(navigator.gpu){try{const ad=await navigator.gpu.requestAdapter();if(ad){f16=ad.features.has('shader-f16');tries.push(['webgpu',f16?'q4f16':'q4']);}}catch(e){}}
+  tries.push(['wasm','q4'],['wasm','int8']);let last=null;
+  for(const [device,dtype] of tries){try{if(device==='wasm'){try{T.env.backends.onnx.wasm.proxy=true;}catch(e){}}ai.gen=await T.pipeline('text-generation',MODEL,{device,dtype,progress_callback:prog});ai.device=device;break;}catch(e){last=e;console.warn('AI load',device,e);}}
+  if(!ai.gen)throw last||new Error('could not start');ai.state='ready';save({dl:1});ui();return ai.gen;})();
+ try{return await ai.loading;}catch(e){ai.state='error';ai.err=String(e&&e.message||e).slice(0,160);ai.loading=null;ui();throw e;}finally{if(ai.state!=='loading')ai.loading=null;}}
+const SYS=`You turn a player's wish into simple build orders for the game maker BuildX. Reply ONLY with orders, one per line. Never explain.
+Order forms you can use:
+add [number] [color] [material] [size] THING [that ABILITY]
+make it [color | material | bigger | smaller | taller | ABILITY]
+delete it
+make it night | make it day | make it sunset | add fog
+THING: part, block, cube, ball, cylinder, wedge, cone, floor, platform, wall, door, pillar, ramp, stairs, tree, lava, water, ice, coin, gem, checkpoint, spawn, finish, jump pad, speed pad, heal pad, teleporter, falling step, moving platform, conveyor, ladder, seat, lamp, campfire, bot, leaderboard, countdown, music, apple, health potion, speed drink, jump potion, sword, torch, bomb, mushroom, feather, key
+ABILITY: kills, hurts, heals, bounces you, spins, floats, moves, moves up and down, swings, chases you, falls, explodes when touched, explodes when clicked, disappears when touched, disappears when clicked, sparkles, is on fire, gives light, can be collected, says HELLO when touched, opens with the key, is invisible, is see-through, you can walk through it
+COLORS: red, blue, green, yellow, orange, purple, pink, white, black, grey, brown, gold, cyan, lime, and other color names
+MATERIALS: neon, glass, metal, wood, planks, brick, concrete, grass, sand, ice, marble, stone, gold, snow, rock`;
+const EX=[['make a deadly floor of lava','add lava'],['i want a big red spinning ball','add a big red ball that spins'],['obby with 3 jumps and an end','add 3 platforms\nadd a finish'],['put 10 coins around','add 10 coins'],['make the selected thing glow blue and float','make it blue neon\nmake it float'],['a door that needs the key, and a key','add a door that opens with the key\nadd a key'],['spooky','make it night\nadd fog'],['a house','add a floor\nadd 4 brick walls\nadd a door']];
+async function askAI(text,onTok){const gen=await loadAI();const o=selObj();const names=S.items.filter(x=>x.cls==='Part'||x.cls==='Model').slice(-25).map(x=>x.name);
+ const msgs=[{role:'system',content:SYS}];EX.forEach(([u,a])=>{msgs.push({role:'user',content:u},{role:'assistant',content:a});});
+ msgs.push({role:'user',content:(o?`(selected: ${o.name}) `:'')+text});
+ let acc='';const st=new ai.T.TextStreamer(gen.tokenizer,{skip_prompt:true,skip_special_tokens:true,callback_function:s=>{acc+=s;onTok&&onTok(acc);}});
+ const r=await gen(msgs,{max_new_tokens:120,do_sample:false,streamer:st});let txt='';try{const g=r[0].generated_text;txt=Array.isArray(g)?g[g.length-1].content:String(g);}catch(e){txt=acc;}return txt;}
+window.bxAI=ai;window.bxAskAI=askAI;
+
+/* ---------- the panel ---------- */
+const css=document.createElement('style');css.textContent=`
+#bxai{position:absolute;right:0;top:0;bottom:0;width:340px;max-width:50%;background:var(--pn);border-left:1px solid var(--ln);z-index:40;display:none;flex-direction:column;color:var(--tx);font-size:13px}
+body.aiopen #bxai{display:flex}body.playing #bxai{display:none}
+#bxai .ah{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--ln);font-weight:700}#bxai .ah span{flex:1}
+#bxai .ah button,#bxai .ai-row button,#bxai .as button{font:inherit;font-size:12px;border:1px solid var(--ln);background:var(--pn2);color:var(--tx);padding:6px 10px;cursor:pointer}
+#bxai .ah button.x{border:0;background:none;font-size:16px;padding:2px 6px}
+#bxai .log{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:6px;user-select:text}
+#bxai .m{padding:7px 9px;border:1px solid var(--ln);background:var(--pn2);white-space:pre-wrap;line-height:1.35;max-width:92%}
+#bxai .m.u{align-self:flex-end;background:#2b3a8f;border-color:#3f51c9;color:#fff}
+#bxai .m.t{color:var(--mu);font-style:italic}
+#bxai .m .ub{display:block;margin-top:6px}#bxai .m .ub button{font:inherit;font-size:11.5px;border:1px solid var(--ln);background:#1b1c20;color:var(--tx);padding:4px 8px;cursor:pointer}
+#bxai .tips{color:var(--mu);font-size:12px;line-height:1.45}#bxai .tips b{color:var(--tx);font-weight:600;cursor:pointer;text-decoration:underline dotted}
+#bxai .as{border-top:1px solid var(--ln);padding:7px 10px;font-size:11.5px;color:var(--mu);display:flex;flex-direction:column;gap:5px}
+#bxai .as .r1{display:flex;align-items:center;gap:6px}#bxai .as .r1 span{flex:1;min-width:0}#bxai .as .r1 button{flex:none;padding:4px 8px}
+#bxai .as .bar{height:6px;background:#1b1c20;border:1px solid var(--ln)}#bxai .as .bar i{display:block;height:100%;background:#5b6cff}
+#bxai .ai-row{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--ln)}
+#bxai textarea{flex:1;min-width:0;resize:none;height:40px;background:#1b1c20;border:1px solid var(--ln);color:var(--tx);font:inherit;padding:6px;user-select:text}
+#bxai .ai-row button.send{background:#3a4bd8;border-color:#5b6cff;color:#fff;font-weight:700}
+@media (max-width:760px),(max-height:500px){#bxai{width:46%;max-width:none}}`;document.head.appendChild(css);
+const pan=document.createElement('div');pan.id='bxai';
+pan.innerHTML=`<div class="ah"><span>Assistant</span><button class="x" id="ai_x" aria-label="Close">X</button></div><div class="log" id="ai_log"></div><div class="as" id="ai_st"></div>
+<div class="ai-row"><textarea id="ai_in" placeholder="Tell me what to build or code…" enterkeyhint="send"></textarea><button class="send" id="ai_go">Send</button></div>`;
+$('view').appendChild(pan);['pointerdown','wheel','keydown'].forEach(ev=>pan.addEventListener(ev,e=>e.stopPropagation()));
+const log=$('ai_log');
+function msg(text,cls){const d=document.createElement('div');d.className='m'+(cls?' '+cls:'');d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}
+const TIPS=['add a red ball that spins','add lava','add 10 coins','add a door that opens with the key','add a jump pad','add 3 trees','add stairs','make it night','make it bigger','make it blue neon','make it float','delete it'];
+function intro(){const d=document.createElement('div');d.className='tips';d.innerHTML=`Type what you want and I'll build it or write the code. To change a part, tap it first and say things like "make it…". Try: `+TIPS.map(t=>`<b data-tip="${esc(t)}">${esc(t)}</b>`).join(', ')+`.`;log.appendChild(d);d.querySelectorAll('[data-tip]').forEach(b=>b.onclick=()=>{$('ai_in').value=b.dataset.tip;$('ai_in').focus();});}
+intro();
+function ui(){const el=$('ai_st');if(!el)return;const s=store();let h='';
+ if(ai.state==='loading')h=`<div>${s.dl?'Waking up the small AI…':'Downloading the small AI'} ${ai.pct?ai.pct+'%':''}${ai.mb&&!s.dl?' of '+ai.mb+' MB':''}</div><div class="bar"><i style="width:${ai.pct||2}%"></i></div>`;
+ else if(ai.state==='ready'||s.dl)h=`<div class="r1"><span>Small AI: ${s.off?'off':'on (runs on your phone, can be slow)'}</span><button id="ai_tog">${s.off?'Turn on':'Turn off'}</button><button id="ai_rm">Delete</button></div>`;
+ else if(ai.state==='error')h=`<div class="r1"><span>The small AI couldn't start: ${esc(ai.err)}</span><button id="ai_dl">Try again</button></div>`;
+ else h=`<div class="r1"><span>For harder requests: a free small AI for your phone (500 to 800 MB, once, use Wi-Fi)</span><button id="ai_dl">Download</button></div>`;
+ el.innerHTML=h;const b=$('ai_dl');if(b)b.onclick=()=>{loadAI().then(()=>msg('The small AI is ready.')).catch(()=>{});};
+ const tg=$('ai_tog');if(tg)tg.onclick=()=>{save({off:!store().off});ui();};
+ const rm=$('ai_rm');if(rm)rm.onclick=async()=>{if(!await bxConfirm('Delete the small AI download from this phone?'))return;try{await caches.delete('transformers-cache');}catch(e){}save({dl:0});ai.gen=null;ai.state='off';ui();};}
+ui();
+let busy=false;
+async function send(){const inp=$('ai_in');const text=inp.value.trim();if(!text||busy)return;inp.value='';msg(text,'u');busy=true;$('ai_go').disabled=true;
+ try{const before=JSON.stringify(S.items)+JSON.stringify(S.lighting);const out=[];const miss=helper(text,out);let aiUsed=false;
+  if(miss.length&&(ai.gen||(store().dl&&!store().off))&&!store().off){const th=msg('Thinking…','t');try{const txt=await askAI(miss.join('. '),a=>{th.textContent='Thinking… '+a;});th.remove();aiUsed=true;
+    const lines=txt.split('\n').map(s=>s.replace(/^[-*\d.)\s]+/,'').trim()).filter(Boolean).slice(0,12);const out2=[];const miss2=[];lines.forEach(l=>{if(!sentence(l,out2))miss2.push(l);});
+    if(out2.length){out.push(...out2);miss.length=0;}if(!out2.length)out.push('Sorry, I couldn\'t turn that into something to build. Try saying it more simply, like "add a blue ball that spins".');}
+   catch(e){th.remove();out.push('The small AI had a problem: '+String(e&&e.message||e).slice(0,120));}}
+  if(miss.length&&!aiUsed)out.push(`I didn't understand: "${miss.join('", "')}". Try simpler words, like "add a red ball that spins" or "make it bigger".${store().dl?'':' Or download the small AI below for harder requests.'}`);
+  const changed=JSON.stringify(S.items)+JSON.stringify(S.lighting)!==before;if(changed){commit();refreshAll();}
+  const d=msg(out.join('\n')||'Done.');if(changed){const u=document.createElement('span');u.className='ub';u.innerHTML='<button>Undo</button>';d.appendChild(u);log.scrollTop=log.scrollHeight;u.querySelector('button').onclick=()=>{undo();u.remove();d.appendChild(document.createTextNode('\n(undone)'));};}}
+ finally{busy=false;$('ai_go').disabled=false;}}
+$('ai_go').onclick=send;$('ai_in').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+$('ai_x').onclick=()=>document.body.classList.remove('aiopen');
+/* top bar button */
+const ob=$('b_output');if(ob){const b=document.createElement('button');b.className='tb';b.id='b_assist';b.title='Assistant';b.innerHTML='<span class="icw"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4zM12 7.5l1 2.2 2.3.3-1.7 1.6.5 2.3-2.1-1.2-2.1 1.2.5-2.3-1.7-1.6 2.3-.3z"></path></svg></span><span class="lbl"> Assistant</span>';ob.after(b);
+ b.onclick=()=>{document.body.classList.toggle('aiopen');if(document.body.classList.contains('aiopen'))setTimeout(()=>{try{$('ai_in').focus({preventScroll:true});}catch(e){}},50);};}
 })();
 
 window.__BX={get S(){return S;},get G(){return G;},startPlay,stopPlay,insertSpec,CATALOG,CMDS,compile,cond,pick,render,sel:()=>sel,setSel:v=>{sel=v;refreshAll();},openCode,closeCode,gameStep,killHumanoid,targets,cam,tapQ:()=>tapQ};
