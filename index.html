@@ -6458,16 +6458,21 @@ function helper(text,out){placed=0;const parts=text.split(/\n+|(?<=[a-z0-9"'])[.
 window.bxHelper=(text)=>{const out=[];const miss=helper(text,out);return {out,miss};};
 
 /* ---------- the small AI (runs on the phone, downloaded once) ---------- */
-const MODEL='onnx-community/Qwen2.5-0.5B-Instruct',LIB='https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.6';
+const MODEL='HuggingFaceTB/SmolLM2-360M-Instruct',LIB='https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.6';
 let ai={state:'off',gen:null,T:null,pct:0,err:''};const store=()=>{try{return JSON.parse(localStorage.getItem('bxai')||'{}');}catch(e){return {};}};const save=v=>{try{localStorage.setItem('bxai',JSON.stringify(Object.assign(store(),v)));}catch(e){}};
-async function loadAI(){if(ai.gen)return ai.gen;if(ai.loading)return ai.loading;ai.state='loading';ai.pct=0;ai.err='';ui();
+/* if the app died while the AI was loading or thinking last time, keep it off so it can't crash again */
+{const s0=store();if(s0.loading||s0.thinking){save({loading:0,thinking:0,off:1});ai.crashed=1;}if(s0.dl&&s0.m!==MODEL)save({dl:0,off:0});}
+/* the first version used a bigger model: remove its files so they don't fill the phone */
+try{caches.open('transformers-cache').then(c=>c.keys().then(ks=>ks.filter(k=>/Qwen2\.5-0\.5B/.test(k.url)).forEach(k=>c.delete(k)))).catch(()=>{});}catch(e){}
+function freeLater(){clearTimeout(ai.idle);ai.idle=setTimeout(async()=>{if(busy||!ai.gen)return;const g=ai.gen;ai.gen=null;ai.state='off';try{await g.dispose();}catch(e){}ui();},30000);}
+async function loadAI(){clearTimeout(ai.idle);if(ai.gen)return ai.gen;if(ai.loading)return ai.loading;ai.state='loading';ai.pct=0;ai.err='';save({loading:1});ui();
  ai.loading=(async()=>{const T=await import(LIB);ai.T=T;T.env.allowLocalModels=false;try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
   const files={};const prog=p=>{if(p&&p.status==='progress'&&p.file){files[p.file]=[p.loaded||0,p.total||0];let a=0,b=0;Object.values(files).forEach(([x,y])=>{a+=x;b+=y;});ai.pct=b?Math.round(a/b*100):0;ai.mb=Math.round(b/1048576);ui();}};
   let tries=[];let f16=false;if(navigator.gpu){try{const ad=await navigator.gpu.requestAdapter();if(ad){f16=ad.features.has('shader-f16');tries.push(['webgpu',f16?'q4f16':'q4']);}}catch(e){}}
   tries.push(['wasm','q4'],['wasm','int8']);let last=null;
   for(const [device,dtype] of tries){try{if(device==='wasm'){try{T.env.backends.onnx.wasm.proxy=true;}catch(e){}}ai.gen=await T.pipeline('text-generation',MODEL,{device,dtype,progress_callback:prog});ai.device=device;break;}catch(e){last=e;console.warn('AI load',device,e);}}
-  if(!ai.gen)throw last||new Error('could not start');ai.state='ready';save({dl:1});ui();return ai.gen;})();
- try{return await ai.loading;}catch(e){ai.state='error';ai.err=String(e&&e.message||e).slice(0,160);ai.loading=null;ui();throw e;}finally{if(ai.state!=='loading')ai.loading=null;}}
+  if(!ai.gen)throw last||new Error('could not start');ai.state='ready';save({dl:1,m:MODEL,loading:0});ui();return ai.gen;})();
+ try{return await ai.loading;}catch(e){ai.state='error';save({loading:0});ai.err=String(e&&e.message||e).slice(0,160);ai.loading=null;ui();throw e;}finally{if(ai.state!=='loading')ai.loading=null;}}
 const SYS=`You turn a player's wish into simple build orders for the game maker BuildX. Reply ONLY with orders, one per line. Never explain.
 Order forms you can use:
 add [number] [color] [material] [size] THING [that ABILITY]
@@ -6483,7 +6488,7 @@ async function askAI(text,onTok){const gen=await loadAI();const o=selObj();const
  const msgs=[{role:'system',content:SYS}];EX.forEach(([u,a])=>{msgs.push({role:'user',content:u},{role:'assistant',content:a});});
  msgs.push({role:'user',content:(o?`(selected: ${o.name}) `:'')+text});
  let acc='';const st=new ai.T.TextStreamer(gen.tokenizer,{skip_prompt:true,skip_special_tokens:true,callback_function:s=>{acc+=s;onTok&&onTok(acc);}});
- const r=await gen(msgs,{max_new_tokens:120,do_sample:false,streamer:st});let txt='';try{const g=r[0].generated_text;txt=Array.isArray(g)?g[g.length-1].content:String(g);}catch(e){txt=acc;}return txt;}
+ save({thinking:1});let r;try{r=await gen(msgs,{max_new_tokens:80,do_sample:false,streamer:st});}finally{save({thinking:0});freeLater();}let txt='';try{const g=r[0].generated_text;txt=Array.isArray(g)?g[g.length-1].content:String(g);}catch(e){txt=acc;}return txt;}
 window.bxAI=ai;window.bxAskAI=askAI;
 
 /* ---------- the panel ---------- */
@@ -6514,12 +6519,12 @@ const log=$('ai_log');
 function msg(text,cls){const d=document.createElement('div');d.className='m'+(cls?' '+cls:'');d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}
 const TIPS=['add a red ball that spins','add lava','add 10 coins','add a door that opens with the key','add a jump pad','add 3 trees','add stairs','make it night','make it bigger','make it blue neon','make it float','delete it'];
 function intro(){const d=document.createElement('div');d.className='tips';d.innerHTML=`Type what you want and I'll build it or write the code. To change a part, tap it first and say things like "make it…". Try: `+TIPS.map(t=>`<b data-tip="${esc(t)}">${esc(t)}</b>`).join(', ')+`.`;log.appendChild(d);d.querySelectorAll('[data-tip]').forEach(b=>b.onclick=()=>{$('ai_in').value=b.dataset.tip;$('ai_in').focus();});}
-intro();
+intro();if(ai.crashed)msg('The small AI made the app stop last time, probably because your phone ran out of memory, so I turned it off. The helper still works. You can turn the AI back on below.');
 function ui(){const el=$('ai_st');if(!el)return;const s=store();let h='';
  if(ai.state==='loading')h=`<div>${s.dl?'Waking up the small AI…':'Downloading the small AI'} ${ai.pct?ai.pct+'%':''}${ai.mb&&!s.dl?' of '+ai.mb+' MB':''}</div><div class="bar"><i style="width:${ai.pct||2}%"></i></div>`;
  else if(ai.state==='ready'||s.dl)h=`<div class="r1"><span>Small AI: ${s.off?'off':'on (runs on your phone, can be slow)'}</span><button id="ai_tog">${s.off?'Turn on':'Turn off'}</button><button id="ai_rm">Delete</button></div>`;
  else if(ai.state==='error')h=`<div class="r1"><span>The small AI couldn't start: ${esc(ai.err)}</span><button id="ai_dl">Try again</button></div>`;
- else h=`<div class="r1"><span>For harder requests: a free small AI for your phone (500 to 800 MB, once, use Wi-Fi)</span><button id="ai_dl">Download</button></div>`;
+ else h=`<div class="r1"><span>For harder requests: a free small AI for your phone (about 300 MB, once, use Wi-Fi)</span><button id="ai_dl">Download</button></div>`;
  el.innerHTML=h;const b=$('ai_dl');if(b)b.onclick=()=>{loadAI().then(()=>msg('The small AI is ready.')).catch(()=>{});};
  const tg=$('ai_tog');if(tg)tg.onclick=()=>{save({off:!store().off});ui();};
  const rm=$('ai_rm');if(rm)rm.onclick=async()=>{if(!await bxConfirm('Delete the small AI download from this phone?'))return;try{await caches.delete('transformers-cache');}catch(e){}save({dl:0});ai.gen=null;ai.state='off';ui();};}
