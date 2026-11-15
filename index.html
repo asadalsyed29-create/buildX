@@ -5736,6 +5736,15 @@ let lastMap=null;
 function split(src){let L=String(src==null?'':src).split('\n');let O=L.map((_,i)=>i+1);const ins=(at,line)=>{L.splice(at,0,line);O.splice(at,0,O[at-1]||1);};
  /* #onclick -> #on_click, #ontouchend -> #on_touch_end, #ontap -> #on_click */
  L=L.map(l=>l.replace(/^(\s*)#\s*on[_\s]*(click|clicked|tap|tapped|touch[_\s]?end|touched|touch)\b/i,(m0,sp,w)=>sp+'#on_'+({clicked:'click',tap:'click',tapped:'click',touched:'touch',touchend:'touch_end',touch_end:'touch_end','touch end':'touch_end'}[w.toLowerCase()]||w.toLowerCase())));
+ /* "#if = toucher = touch = then" … #end is a touch block, the same as #on_touch … #end */
+ L=L.map(l=>l.replace(/^(\s*)#\s*if\s*=\s*toucher\s*=\s*(?:touch|touches|touched|touching)\s*=\s*then\s*$/i,'$1#on_touch'));
+ /* #once … #end runs only the first time in this play; #once_ever … #end only the very first time ever (saved). One line: #once = command */
+ {let h=5381;const s0=String(src==null?'':src);for(let q=0;q<s0.length;q++)h=((h*33)^s0.charCodeAt(q))>>>0;const hk=h.toString(36);
+  for(let i=0;i<L.length;i++){const m=L[i].match(/^(\s*)#\s*once(_ever|_forever)?\s*(?:=\s*(.*))?$/i);if(!m)continue;
+   const sp=m[1],ever=!!m[2],v='once_'+(ever?'e':'s')+hk+'_'+O[i];const rest=(m[3]||'').trim().replace(/^then\s*(=\s*)?/i,'');
+   const add=[];if(ever)add.push(sp+'#load_value = '+v);add.push(sp+'#unless = '+v+' > 0');add.push(sp+'#set = '+v+' : 1');if(ever)add.push(sp+'#save_value = '+v);
+   if(rest){add.push(sp+'#'+rest.replace(/^#\s*/,''));add.push(sp+'#end');}
+   L[i]=add[0];for(let k=1;k<add.length;k++){ins(i+k,add[k]);L=shiftRefs(L,i+k);}i+=add.length-1;}}
  /* "#if = Frame77 = visible = then = delete = self" : the part before "then" is the check, the part after is the command */
  L=L.map(l=>{const m=l.match(/^(\s*)#\s*(if|unless|while|elseif)\s*=\s*(.+?)\s*=\s*then\s*(?:=\s*(.*))?$/i);if(!m)return l;
   let c=m[3].trim();const cp=c.split(/\s*=\s*/);if(cp.length===2)c=cp[0]+' == '+cp[1];else if(cp.length>2)c=cp[0]+' == '+cp.slice(1).join(' ');
@@ -5830,6 +5839,8 @@ const _da=doAct;doAct=function(c,op){if(op&&(op.name==='visible'||op.name==='inv
     if(vis!==null){const yes=want?vis:!vis;return neg?!yes:yes;}}}
   return _cd.apply(this,arguments);};}
 })();
+try{CF('once','runs the lines inside only the first time (in this play) … #end','#once\n#message = Welcome!\n#end');
+ CF('once_ever','runs the lines inside only the very first time ever; it is saved, so it never runs again … #end','#once_ever\n#message = First time here? Have 50 coins!\n#coin = player_main : 50\n#end');}catch(e){}
 
 /* ================= 27. Mesh maker: start from lots of shapes (with settings), whole-mesh tools, draw your own outline/profile, mirror editing ================= */
 (function(){
