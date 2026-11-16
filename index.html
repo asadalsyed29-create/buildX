@@ -6727,6 +6727,30 @@ const item=(cls,props,kids,r)=>`<Item class="${cls}" referent="${r||ref()}"><Pro
 const sval=(name,v)=>item('StringValue',[P_.str('Name',name),P_.str('Value',v)]);
 const nval=(name,v)=>item('NumberValue',[P_.str('Name',name),P_.dbl('Value',v)]);
 const bval=(name,v)=>item('BoolValue',[P_.str('Name',name),P_.bool('Value',v)]);
+/* ---------- the spawn pad marking (same drawing as in BuildX), built from GUI frames on the top side so no image upload is needed ---------- */
+function spawnGui(size,base){const ppu=Math.max(4,Math.min(100,512/Math.max(size[0],size[2],0.1)));const W=size[0]*ppu,H=size[2]*ppu,m=Math.min(W,H);const ink='#2a2e37',acc='#5b6cff';const K=[];
+ const box=(name,x,y,w,h,col,tr,extra,kids)=>item('Frame',[P_.str('Name',name),P_.udim2('Position',0,x,0,y),P_.udim2('Size',0,w,0,h),P_.c3('BackgroundColor3',col),P_.float('BackgroundTransparency',tr),P_.int('BorderSizePixel',0),...(extra||[])],kids||[]);
+ const corner=(px)=>item('UICorner',[P_.str('Name','UICorner'),px==='round'?P_.udim('CornerRadius',0.5,0):P_.udim('CornerRadius',0,px)]);
+ const stroke=(col,t,tr)=>item('UIStroke',[P_.str('Name','UIStroke'),P_.c3('Color',col),P_.float('Thickness',t),P_.float('Transparency',tr),P_.tok('ApplyStrokeMode',1),P_.tok('LineJoinMode',0)]);
+ const line=(a,b,th,col,tr,z)=>{const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy);return item('Frame',[P_.str('Name','Line'),`<Vector2 name="AnchorPoint"><X>0.5</X><Y>0.5</Y></Vector2>`,P_.udim2('Position',0,(a[0]+b[0])/2,0,(a[1]+b[1])/2),P_.udim2('Size',0,L+th*0.6,0,th),P_.float('Rotation',Math.atan2(dy,dx)*180/Math.PI),P_.c3('BackgroundColor3',col),P_.float('BackgroundTransparency',tr||0),P_.int('BorderSizePixel',0),P_.int('ZIndex',z||1)]);};
+ /* tape border */
+ const bi=m*0.045,bw=m*0.05;K.push(box('Border',bi+bw,bi+bw,W-(bi+bw)*2,H-(bi+bw)*2,'#000000',1,[],[corner(m*0.035),stroke(ink,bw,0.18)]));
+ /* corner brackets */
+ const ci=bi+bw+m*0.05,cl=m*0.12,lw=m*0.03;[[ci,ci,1,1],[W-ci,ci,-1,1],[ci,H-ci,1,-1],[W-ci,H-ci,-1,-1]].forEach(([px,py,sx,sy])=>{
+  K.push(box('Bracket',sx>0?px-lw/2:px-cl,py-lw/2,cl+lw/2,lw,acc,0.05));K.push(box('Bracket',px-lw/2,sy>0?py-lw/2:py-cl,lw,cl+lw/2,acc,0.05));});
+ /* centre badge */
+ const cx=W/2,cy=H/2,Rr=m*0.25;const disc=(name,r,col,tr,extra,kids)=>box(name,cx-r,cy-r,r*2,r*2,col,tr,extra,[corner('round'),...(kids||[])]);
+ K.push(disc('BadgeRim',Rr*1.16,ink,0.1));K.push(disc('Badge',Rr,acc,0));K.push(disc('Ring',Rr*0.88-m*0.006,'#000000',1,[],[stroke('#ffffff',m*0.012,0.1)]));
+ /* the little cube: three filled faces + outline */
+ const sz=Rr*0.46,k=0.5;const T=[cx,cy-sz*0.98],Lm=[cx-sz*0.87,cy-sz*k],Rm=[cx+sz*0.87,cy-sz*k],C=[cx,cy],Lb=[cx-sz*0.87,cy+sz*k],Rb=[cx+sz*0.87,cy+sz*k],B=[cx,cy+sz*0.98];
+ const lerp=(a,b,u)=>[a[0]+(b[0]-a[0])*u,a[1]+(b[1]-a[1])*u];const N=14;
+ const fill=(a,b,c,d,col)=>{/* face a-b-c-d: lines parallel to a-b, swept from a-b to d-c */const th=Math.hypot(d[0]-a[0],d[1]-a[1])/N*1.6+1;for(let i=0;i<=N;i++){const u=i/N;K.push(line(lerp(a,d,u),lerp(b,c,u),th,col,0,2));}};
+ fill(T,Rm,C,Lm,'#ffffff');fill(Lm,C,B,Lb,'#dfe3ff');fill(C,Rm,Rb,B,'#b8c0ff');
+ const ow=Math.max(1,m*0.009);[[T,Rm],[Rm,Rb],[Rb,B],[B,Lb],[Lb,Lm],[Lm,T],[Lm,C],[C,Rm],[C,B]].forEach(([a,b])=>K.push(line(a,b,ow,'#2c3596',0,3)));
+ /* worn spots: little patches of the pad's own colour on top of the paint */
+ let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+ for(let i=0;i<70;i++){const px=rnd()*W,py=rnd()*H,r=(0.8+rnd()*rnd()*4)*m/512;K.push(item('Frame',[P_.str('Name','Worn'),`<Vector2 name="AnchorPoint"><X>0.5</X><Y>0.5</Y></Vector2>`,P_.udim2('Position',0,px,0,py),P_.udim2('Size',0,r*2*(1+rnd()*2),0,r*2),P_.float('Rotation',rnd()*180),P_.c3('BackgroundColor3',base),P_.float('BackgroundTransparency',0.15+rnd()*0.5),P_.int('BorderSizePixel',0),P_.int('ZIndex',4)],[item('UICorner',[P_.udim('CornerRadius',0.5,0)])]));}
+ return item('SurfaceGui',[P_.str('Name','SpawnMarking'),P_.tok('Face',1),P_.tok('SizingMode',1),P_.float('PixelsPerStud',ppu),P_.float('LightInfluence',1),P_.bool('AlwaysOnTop',false),P_.bool('ResetOnSpawn',false),P_.tok('ZIndexBehavior',1)],K);}
 /* ---------- materials ---------- */
 const MATTOK={Plastic:256,SmoothPlastic:272,Neon:288,Wood:512,WoodPlanks:528,Marble:784,Slate:800,CrackedLava:804,Concrete:816,Granite:832,Brick:848,Pebble:864,Cobblestone:880,Rock:896,CorrodedMetal:1040,DiamondPlate:1056,Foil:1072,Metal:1088,Grass:1280,Sand:1296,Fabric:1312,Snow:1328,Ice:1536,Glass:1568,ForceField:1584};
 const MATMAP={Studs:'Plastic',Truss:'Metal',Carpet:'Fabric',CeramicTiles:'Marble',Leather:'Fabric',Lava:'CrackedLava',Grid:'Plastic'};
@@ -6796,6 +6820,8 @@ function partXML(o,extraKids){const p=o.props||{};let shape=p.Shape||'Block';con
  if(cls==='SpawnLocation'){props.push(P_.int('Duration',0),P_.bool('Neutral',true),P_.bool('Enabled',true));}
  const d=+p.Density,fr=+p.Friction,el=+p.Elasticity;if((p.Density!=null&&Math.abs(d-0.7)>1e-3)||(p.Friction!=null&&Math.abs(fr-0.3)>1e-3)||(p.Elasticity!=null&&Math.abs(el-0.5)>1e-3))
   props.push(`<PhysicalProperties name="CustomPhysicalProperties"><CustomPhysics>true</CustomPhysics><Density>${f(isFinite(d)?Math.max(0.01,d):0.7)}</Density><Friction>${f(isFinite(fr)?fr:0.3)}</Friction><Elasticity>${f(isFinite(el)?el:0.5)}</Elasticity><FrictionWeight>1</FrictionWeight><ElasticityWeight>1</ElasticityWeight></PhysicalProperties>`);
+ if(cls==='SpawnLocation'||(p.Spawn&&cls==='Part'))kids.push(spawnGui(size,p.Color||'#a3a2a5'));
+ if(p.Material==='Grid')(o.name==='Baseplate'?[1]:[0,1,2,3,4,5]).forEach(fc=>kids.push(item('Texture',[P_.str('Name','Grid'),P_.str('Texture','rbxassetid://6372755229'),P_.tok('Face',fc),P_.c3('Color3','#000000'),P_.float('Transparency',0.8),P_.float('StudsPerTileU',8),P_.float('StudsPerTileV',8)])));
  if(meshTag)kids.push(sval('BuildXMesh',meshTag));
  const ck=codeKids(o.code);if(ck.length){kids.push(sval('BuildXKind','part'));kids.push(...ck);}
  if(p.Shape==='Mesh'&&p.Texture)IMAGES.push({name:(o.name||'Mesh')+'-texture',url:p.Texture});
