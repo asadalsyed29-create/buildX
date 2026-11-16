@@ -1419,7 +1419,7 @@ function gameStep(dt0){const dt=dt0*G.ts;G.t+=dt;if(G.titleT>0)G.titleT-=dt0;if(
  if(G.dayCycle>0)S.lighting.ClockTime=(S.lighting.ClockTime+dt*24/G.dayCycle)%24;
  G.later=G.later.filter(([t,f])=>{if(G.t>=t){try{f();}catch(e){}return false;}return true;});
  /* input -> player */const p=G.player;const eye=camEye(),f=norm([cam.tgt[0]-eye[0],0,cam.tgt[2]-eye[2]]),r=[-f[2],0,f[0]];const K=G.keys;
- let ix=joy.x+((K.d||K.arrowright)?1:0)-((K.a||K.arrowleft)?1:0),iy=joy.y+((K.s||K.arrowdown)?1:0)-((K.w||K.arrowup)?1:0);if(G.camMode==='side'){p.input.x=ix;p.input.y=0;}else{const mv=add(mul(f,-iy),mul(r,ix));p.input.x=mv[0];p.input.y=mv[2];}p.input.jump=jumpHeld||!!K[' '];p.input.down=downHeld||!!K.shift||!!K.control||!!K.q;
+ {const ca=(K.arrowright?1:0)-(K.arrowleft?1:0),cp=(K.arrowup?1:0)-(K.arrowdown?1:0);if(ca||cp){cam.yaw-=ca*dt*2.4;cam.pitch=clamp(cam.pitch-cp*dt*1.6,-1.2,1.45);}}let ix=joy.x+(K.d?1:0)-(K.a?1:0),iy=joy.y+(K.s?1:0)-(K.w?1:0);if(G.camMode==='side'){p.input.x=ix;p.input.y=0;}else{const mv=add(mul(f,-iy),mul(r,ix));p.input.x=mv[0];p.input.y=mv[2];}p.input.jump=jumpHeld||!!K[' '];p.input.down=downHeld||!!K.shift||!!K.control||!!K.q;
  G.bots.forEach(h=>botBrain(h,dt));
  G.parts.forEach(P=>{if(P.alive)partBehaviors(P,dt);});
  G.parts.forEach(P=>{P.obb=P.alive?obbOfSt(P.st):null;P.brad=len(P.st.Size)/2;if(P.obb&&P.obb.tm)P.brad=Math.max(P.brad,len(P.obb.h));if(P.obb&&P.dyn&&P.R)P.obb.ax=P.R;});
@@ -2028,7 +2028,7 @@ function startControl(P,speed){if(!G||!P)return;if(P.kind==='bot'||P.kind==='scr
  document.body.classList.add('ctrl');cam.dist=Math.max(10,Math.min(cam.dist,18));sfx('click');}
 function stopControl(){if(!G||!G.ctrl)return;G.ctrl=null;document.body.classList.remove('ctrl');}
 function ctrlStep(dt){const C=G.ctrl;if(!C)return;const P=C.P;if(P.alive===false||(P.kind==='part'&&!P.alive)){stopControl();return;}const st=P.kind==='model'?P.root.st:P.st;const K=G.keys;
- const ix=joy.x+((K.d||K.arrowright)?1:0)-((K.a||K.arrowleft)?1:0),iy=joy.y+((K.s||K.arrowdown)?1:0)-((K.w||K.arrowup)?1:0);const up=(jumpHeld||K[' '])?1:0,dn=(downHeld||K.shift||K.q||K.control)?1:0;
+ const ix=joy.x+(K.d?1:0)-(K.a?1:0),iy=joy.y+(K.s?1:0)-(K.w?1:0);const up=(jumpHeld||K[' '])?1:0,dn=(downHeld||K.shift||K.q||K.control)?1:0;
  const e=camEye(),f=norm([cam.tgt[0]-e[0],0,cam.tgt[2]-e[2]]),r=[-f[2],0,f[0]];const mv=add(mul(f,-iy),mul(r,ix));const sp=C.speed;
  st.Position=add(st.Position,[mv[0]*sp*dt,(up-dn)*sp*0.7*dt,mv[2]*sp*dt]);const half=(P.kind==='model'?P.root.st.Size[1]:st.Size[1])/2;if(st.Position[1]<half+0.2)st.Position[1]=half+0.2;
  const yaw=Math.atan2(-f[0],-f[2])/D2R;let cy=st.Orientation[1];let d=yaw-cy;while(d>180)d-=360;while(d<-180)d+=360;cy+=d*Math.min(1,6*dt);
