@@ -329,7 +329,7 @@ button.Click:Connect(function()
 	print(string.format("[BuildX] made %d mesh%s and %d picture%s%s", made, made == 1 and "" or "es", pics, pics == 1 and "" or "s", left > 0 and (", " .. left .. " not done yet (press Make meshes again)") or ". Save the game to keep them."))
 end)
 ]]></ProtectedString></Properties></Item></Item>
-<Item class="ServerScriptService" referent="RBX000002EF"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX000002ED"><Properties><string name="Name">BuildXRuntime</string><ProtectedString name="Source"><![CDATA[-- BuildX runtime for Roblox.
+<Item class="ServerScriptService" referent="RBX000002EF"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX000002EC"><Properties><string name="Name">BuildXRuntime</string><ProtectedString name="Source"><![CDATA[-- BuildX runtime for Roblox.
 -- Made by BuildX's "Export for Roblox". It runs the BuildX code (#commands) of every part,
 -- model, bot, script and GUI thing in this place. The code itself is kept next to each thing
 -- in a StringValue called BuildXSource (what you wrote) and BuildXCode (the same code, ready to run).
@@ -348,6 +348,7 @@ local Remote = ReplicatedStorage:FindFirstChild("BuildXRemote")
 if not Remote then Remote = Instance.new("RemoteEvent"); Remote.Name = "BuildXRemote"; Remote.Parent = ReplicatedStorage end
 pcall(function() local PS = game:GetService("PhysicsService"); PS:RegisterCollisionGroup("BuildXGhost"); PS:CollisionGroupSetCollidable("BuildXGhost", "Default", false) end)
 
+if game:GetService("RunService"):IsStudio() then print("[BuildX] How this game works: ServerScriptService > READ ME - how this game works") end
 -- meshes are built by the client from BuildXMeshData (older places may still have PlaceMeshes for imported meshes)
 local pmMod = script:FindFirstChild("PlaceMeshes")
 local okM, placeMeshes = false, nil
@@ -5123,17 +5124,7 @@ end
 	walkSpeed = 16,
 	jumpPower = 50
 }
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX000002EC"><Properties><string name="Name">README</string><ProtectedString name="Source"><![CDATA[--[[
-BuildX game for Roblox Studio
-
-Everything is in this one file: parts, models, bots, lighting, GUIs, items, code, meshes and pictures.
-Meshes and pictures are built when the game runs (press Play to see them; in edit mode the meshes show as plain blocks).
-
-The BuildX code runs from ServerScriptService > BuildXRuntime. If a command is not supported in Roblox, the Output window says so.
-To put the game online: File > Publish to Roblox.
-]]
-return nil
-]]></ProtectedString></Properties></Item></Item><Item class="Folder" referent="RBX000002EE"><Properties><string name="Name">BuildXScripts</string></Properties><Item class="StringValue" referent="RBX000002CD"><Properties><string name="Name">EscapeNotes</string><string name="Value">{&quot;main&quot;:[],&quot;handlers&quot;:[],&quot;funcs&quot;:{},&quot;rules&quot;:[]}</string></Properties><Item class="StringValue" referent="RBX000002CC"><Properties><string name="Name">BuildXSource</string><string name="Value">-- the escape room: walk in from the hub portal</string></Properties></Item></Item><Item class="StringValue" referent="RBX000002CF"><Properties><string name="Name">HubScript</string><string name="Value">{&quot;main&quot;:[{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;set&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;trophies : 0&quot;,&quot;ln&quot;:1},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;load_value&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;trophies&quot;,&quot;ln&quot;:2},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;load_value&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;once_e1m5ljov_3&quot;,&quot;ln&quot;:3},{&quot;k&quot;:&quot;jz&quot;,&quot;cond&quot;:&quot;once_e1m5ljov_3 &gt; 0&quot;,&quot;neg&quot;:true,&quot;to&quot;:8},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;set&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;once_e1m5ljov_3 : 1&quot;,&quot;ln&quot;:5},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;save_value&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;once_e1m5ljov_3&quot;,&quot;ln&quot;:6},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;message&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;Welcome to the Game Hub! Here are 50 coins to start.&quot;,&quot;ln&quot;:7},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;coins&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;player_main : 50&quot;,&quot;ln&quot;:8},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;wait&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;4s&quot;,&quot;ln&quot;:10},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;message&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;Walk into a portal to play. Beat each game for a trophy!&quot;,&quot;ln&quot;:11}],&quot;handlers&quot;:[],&quot;funcs&quot;:{},&quot;rules&quot;:[]}</string></Properties><Item class="StringValue" referent="RBX000002CE"><Properties><string name="Name">BuildXSource</string><string name="Value">#set = trophies : 0
+]]></ProtectedString></Properties></Item></Item><Item class="Folder" referent="RBX000002ED"><Properties><string name="Name">BuildXScripts</string></Properties><Item class="StringValue" referent="RBX000002CD"><Properties><string name="Name">EscapeNotes</string><string name="Value">{&quot;main&quot;:[],&quot;handlers&quot;:[],&quot;funcs&quot;:{},&quot;rules&quot;:[]}</string></Properties><Item class="StringValue" referent="RBX000002CC"><Properties><string name="Name">BuildXSource</string><string name="Value">-- the escape room: walk in from the hub portal</string></Properties></Item></Item><Item class="StringValue" referent="RBX000002CF"><Properties><string name="Name">HubScript</string><string name="Value">{&quot;main&quot;:[{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;set&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;trophies : 0&quot;,&quot;ln&quot;:1},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;load_value&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;trophies&quot;,&quot;ln&quot;:2},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;load_value&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;once_e1m5ljov_3&quot;,&quot;ln&quot;:3},{&quot;k&quot;:&quot;jz&quot;,&quot;cond&quot;:&quot;once_e1m5ljov_3 &gt; 0&quot;,&quot;neg&quot;:true,&quot;to&quot;:8},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;set&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;once_e1m5ljov_3 : 1&quot;,&quot;ln&quot;:5},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;save_value&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;once_e1m5ljov_3&quot;,&quot;ln&quot;:6},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;message&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;Welcome to the Game Hub! Here are 50 coins to start.&quot;,&quot;ln&quot;:7},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;coins&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;player_main : 50&quot;,&quot;ln&quot;:8},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;wait&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;4s&quot;,&quot;ln&quot;:10},{&quot;k&quot;:&quot;act&quot;,&quot;name&quot;:&quot;message&quot;,&quot;tgt&quot;:null,&quot;conn&quot;:null,&quot;carg&quot;:&quot;&quot;,&quot;args&quot;:&quot;Walk into a portal to play. Beat each game for a trophy!&quot;,&quot;ln&quot;:11}],&quot;handlers&quot;:[],&quot;funcs&quot;:{},&quot;rules&quot;:[]}</string></Properties><Item class="StringValue" referent="RBX000002CE"><Properties><string name="Name">BuildXSource</string><string name="Value">#set = trophies : 0
 #load_value = trophies
 #once_ever
 #message = Welcome to the Game Hub! Here are 50 coins to start.
@@ -5161,7 +5152,71 @@ return nil
 #end
 #coins = player_main : 25
 #teleport = player_main : Hub_Spawn
-#end</string></Properties></Item></Item></Item></Item>
+#end</string></Properties></Item></Item></Item><Item class="Script" referent="RBX000002EE"><Properties><string name="Name">READ ME - how this game works</string><bool name="Disabled">true</bool><ProtectedString name="Source"><![CDATA[--[[
+BUILDX GAME - HOW EVERYTHING WORKS
+This game was made in BuildX and exported for Roblox. Everything is in this one file.
+
+== 1. Opening the game ==
+In Roblox Studio (on a laptop or PC): File > Open from File, then pick the .rbxlx file.
+Open the Explorer and Properties windows from the View tab if you cannot see them.
+
+== 2. Meshes and pictures (do this once per game) ==
+This game has 5 meshes.
+Until you make them, meshes show as plain blocks in edit mode (they get their real shape when you press Play).
+First time only: in the Explorer, open ServerStorage, right-click "BuildX Mesh Maker" and choose Save as Local Plugin.
+Then: Plugins tab > BuildX > Make meshes. It uploads the meshes and pictures to your Roblox account and puts them in place.
+Save the game afterwards (File > Save to File, or publish). Ctrl+Z undoes it.
+If it says some are not ready yet, wait a minute and press Make meshes again (new uploads take a moment).
+Do this before you publish, so everyone sees the real meshes and pictures.
+
+== 3. Playing and testing ==
+Home tab > Play to test as a player. Stop to go back to editing.
+Test tab > Clients and Servers lets you test with 2 or more players.
+The View tab > Output window shows messages from the game. If a BuildX command does not work in Roblox, it says so there and skips that line.
+
+== 4. Where everything is ==
+Workspace: everything in your world (parts, models, bots, spawn pads).
+ServerStorage > Storage: things kept out of the world (BuildX Storage), copied in by your code.
+ServerScriptService > BuildXRuntime: the script that runs all the BuildX code. Do not delete it.
+   BuildXData inside it: the game settings (colors, materials, sounds, items, leaderboard, walk speed...).
+ServerScriptService > BuildXScripts: your BuildX Scripts.
+StarterGui: your GUIs. StarterPlayer: walk speed and jump power. Lighting: time of day, fog and sky.
+ReplicatedStorage: BuildXRemote (talks between the game and the players), BuildXMeshData.
+
+== 5. Your code ==
+Every part, model or bot with code has two values inside it:
+   BuildXSource = the code you wrote in BuildX (for reading).
+   BuildXCode = the same code made ready to run. This is what the game runs.
+To change code, change it in BuildX and export again. Editing BuildXSource in Studio does not change the game.
+You can still move, resize, recolor, copy and delete parts in Studio. Copies keep their code.
+
+== 6. Bots ==
+Each bot is a Model with a Humanoid. Change its health, walk speed and jump power in the Humanoid.
+BuildXBehavior (inside the bot) is what it does: Idle, Static, Wander, Patrol, Follow, Chase, Flee or Dance.
+BuildXRespawn = true means it comes back after it dies.
+The bot is a cube: HumanoidRootPart moves it, Body is what you see.
+
+== 7. GUIs ==
+Your GUIs are in StarterGui. You can move and recolor things in Studio.
+The BuildX values inside buttons (BuildXMode, BuildXLook...) tell the game how the button works. Leave them as they are.
+
+== 8. Saving player data ==
+This game saves things for players (save_value / load_value / once_ever). Roblox saves only work after the game is published.
+To test saves in Studio: publish once, then Home > Game Settings > Security > turn on "Enable Studio Access to API Services".
+
+== 9. Putting it online ==
+Make the meshes first (step 2).
+File > Publish to Roblox, give it a name, then Publish.
+To let everyone play: Home > Game Settings > Permissions > Public, then Save.
+Phones, tablets, PCs and consoles all work. Roblox adds its own controls.
+
+== 10. If something goes wrong ==
+Open View > Output and press Play. Lines starting with [BuildX] tell you what happened.
+If a part does nothing, check that it still has its BuildXCode value inside it.
+You can always export the game from BuildX again.
+]]
+return nil
+]]></ProtectedString></Properties></Item></Item>
 <Item class="StarterGui" referent="RBX000002F0"><Properties><string name="Name">StarterGui</string></Properties><Item class="ScreenGui" referent="RBX000002DD"><Properties><string name="Name">Hud</string><bool name="Enabled">true</bool><bool name="ResetOnSpawn">false</bool><bool name="IgnoreGuiInset">false</bool><token name="ScreenInsets">2</token><token name="ZIndexBehavior">1</token></Properties><Item class="BoolValue" referent="RBX000002D4"><Properties><string name="Name">BuildXGui</string><bool name="Value">true</bool></Properties></Item><Item class="TextLabel" referent="RBX000002D8"><Properties><string name="Name">Trophies</string><UDim2 name="Position"><XS>0.02</XS><XO>0</XO><YS>0.02</YS><YO>0</YO></UDim2><UDim2 name="Size"><XS>0.24</XS><XO>0</XO><YS>0.08</YS><YO>0</YO></UDim2><Color3 name="BackgroundColor3"><R>0</R><G>0</G><B>0</B></Color3><float name="BackgroundTransparency">0.55</float><int name="BorderSizePixel">0</int><bool name="Visible">true</bool><int name="ZIndex">1</int><string name="Text">Trophies:  / 5</string><Color3 name="TextColor3"><R>1</R><G>0.87843</G><B>0.54118</B></Color3><float name="TextSize">24</float><token name="Font">19</token><bool name="TextWrapped">true</bool><token name="TextXAlignment">2</token><float name="TextStrokeTransparency">1</float><Color3 name="TextStrokeColor3"><R>0</R><G>0</G><B>0</B></Color3><float name="TextTransparency">0</float></Properties><Item class="StringValue" referent="RBX000002D5"><Properties><string name="Name">BuildXText</string><string name="Value">Trophies: {trophies} / 5</string></Properties></Item><Item class="StringValue" referent="RBX000002D6"><Properties><string name="Name">BuildXPath</string><string name="Value">Hud.Trophies</string></Properties></Item><Item class="StringValue" referent="RBX000002D7"><Properties><string name="Name">BuildXType</string><string name="Value">Text</string></Properties></Item></Item><Item class="TextLabel" referent="RBX000002DC"><Properties><string name="Name">Coins</string><UDim2 name="Position"><XS>0.02</XS><XO>0</XO><YS>0.11</YS><YO>0</YO></UDim2><UDim2 name="Size"><XS>0.24</XS><XO>0</XO><YS>0.08</YS><YO>0</YO></UDim2><Color3 name="BackgroundColor3"><R>0</R><G>0</G><B>0</B></Color3><float name="BackgroundTransparency">0.55</float><int name="BorderSizePixel">0</int><bool name="Visible">true</bool><int name="ZIndex">1</int><string name="Text">Coins: </string><Color3 name="TextColor3"><R>1</R><G>1</G><B>1</B></Color3><float name="TextSize">22</float><token name="Font">19</token><bool name="TextWrapped">true</bool><token name="TextXAlignment">2</token><float name="TextStrokeTransparency">1</float><Color3 name="TextStrokeColor3"><R>0</R><G>0</G><B>0</B></Color3><float name="TextTransparency">0</float></Properties><Item class="StringValue" referent="RBX000002D9"><Properties><string name="Name">BuildXText</string><string name="Value">Coins: {coins}</string></Properties></Item><Item class="StringValue" referent="RBX000002DA"><Properties><string name="Name">BuildXPath</string><string name="Value">Hud.Coins</string></Properties></Item><Item class="StringValue" referent="RBX000002DB"><Properties><string name="Name">BuildXType</string><string name="Value">Text</string></Properties></Item></Item></Item></Item>
 <Item class="StarterPlayer" referent="RBX000002F3"><Properties><string name="Name">StarterPlayer</string><float name="CharacterWalkSpeed">16</float><bool name="CharacterUseJumpPower">true</bool><float name="CharacterJumpPower">50</float></Properties><Item class="StarterPlayerScripts" referent="RBX000002F2"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX000002F1"><Properties><string name="Name">BuildXClient</string><ProtectedString name="Source"><![CDATA[-- BuildX runtime for Roblox: the screen side (GUIs, messages, camera, keys, flying).
 local Players = game:GetService("Players")
